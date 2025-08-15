@@ -1,0 +1,12 @@
+ollama
+torch
+transformers
+datasets
+tqdm
+gguf>=0.10.0
+unsloth
+matplotlib
+pandas
+seaborn
+pytest
+statsmodels

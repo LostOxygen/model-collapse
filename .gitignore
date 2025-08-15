@@ -1,3 +1,15 @@
+# project specific
+human_eval/
+datasets/
+outputs/
+generated_datasets/
+unsloth_compiled_cache/
+_unsloth_sentencepiece_temp/
+llama.cpp/
+model_outputs/
+.DS_Store
+*.csv
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
