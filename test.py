@@ -200,7 +200,7 @@ def main(
     # load the tokenizer to count to tokens of the dataset
     _, tokenizer = FastLanguageModel.from_pretrained(
         model_name=MODEL_SPECIFIER,
-        max_seq_length=1337,
+        max_seq_length=block_size,
         dtype=None,
         load_in_4bit=True,
     )
@@ -313,7 +313,7 @@ def main(
     )
 
     # preprocess the dataset
-    chunked_dataset = preprocess_dataset(original_dataset, block_size, tokenizer)
+    chunked_dataset = original_dataset # preprocess_dataset(original_dataset, block_size, tokenizer)
     chunked_dataset.save_to_disk(
         DATASET_PATH + f"chunked_dataset_bs{block_size}_{specifier_name}"
     )
@@ -470,16 +470,27 @@ def main(
             print(
                 f"## {TColors.OKBLUE}{TColors.BOLD}Generate Dataset {i}{TColors.ENDC}"
             )
-            new_data = []
-            for _, data_batch in tqdm(
-                enumerate(chunked_dataloader), total=len(chunked_dataloader)
-            ):
-                # tokenize the data batch
-                inputs = list(data_batch["text"])
+            generation_orig_data = original_dataset.select_columns(["instruction"])
+            new_responses = []
+            instructions = []
+            for instr in tqdm(enumerate(generation_orig_data), total=len(generation_orig_data)):
+                prompt = [
+                    {
+                        "role": "system",
+                        "content": "You are a helpful assistant for code completion."
+                    },
+                    {
+                        "role": "user",
+                        "content": instr
+                    },
+                ]
+                formatted_prompt = TOKENIZER.apply_chat_template(
+                    prompt, tokenize=False, add_special_tokens=False, add_generation_prompt=True,
+                )
 
                 # generate the answer using the model
                 inputs = tokenizer(
-                    inputs,
+                    formatted_prompt,
                     padding=True,
                     truncation=True,
                     return_tensors="pt",
@@ -494,17 +505,18 @@ def main(
                     use_cache=True,
                 )
 
-                # only keep and decode the last 64 tokens of the generated answer
-                # generated_answers = generated_answers[:, 64:]
                 generated_answers = tokenizer.batch_decode(generated_answers)
-                print(generated_answers)
-                input()
+                # split the string and only append the assistants response
+                sanitized_answer = generated_answers[0].split("<|im_start|>assistant")[-1]
 
-                new_data += list(generated_answers)
+                new_responses.append(sanitized_answer)
+                instructions.append(instr)
 
             # save the new dataset to disk
-            new_dataset = Dataset.from_dict({"text": new_data})
-            new_dataset = preprocess_dataset(new_dataset, block_size, tokenizer)
+            new_dataset = Dataset.from_dict(
+                {"instruction": instructions, "response": new_responses}
+            )
+            #new_dataset = preprocess_dataset(new_dataset, block_size, tokenizer)
             new_dataset.save_to_disk(
                 DATASET_PATH + f"generated_dataset_{i}_bs{block_size}_{specifier_name}"
             )
@@ -556,8 +568,28 @@ def main(
                 for data_batch in tqdm(
                     ppl_dataloader, desc=f"Calculating perplexity for Generation {i}"
                 ):
+
+                    prompt = [
+                        {
+                            "role": "system",
+                            "content": "You are a helpful assistant for code completion."
+                        },
+                        {
+                            "role": "user",
+                            "content": data_batch["instruction"]
+                        },
+                        {
+                            "role": "assistant",
+                            "content": data_batch["response"]
+                        }
+                    ]
+
+                    formatted_prompt = TOKENIZER.apply_chat_template(
+                        prompt, tokenize=False, add_special_tokens=False
+                    )
+
                     inputs = tokenizer(
-                        data_batch["text"],
+                        formatted_prompt,
                         padding=True,
                         truncation=True,
                         return_tensors="pt",
