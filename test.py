@@ -355,7 +355,7 @@ def main(
                 bias="none",  # Supports any, but = "none" is optimized
                 use_gradient_checkpointing="unsloth",  # True or "unsloth" for very long context
                 random_state=1337,
-                task_type="CAUSAL_LM",
+                #task_type="CAUSAL_LM",
                 use_rslora=False,  # We support rank stabilized LoRA
                 loftq_config=None,  # And LoftQ
             )
