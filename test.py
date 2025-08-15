@@ -210,7 +210,7 @@ def main(
 
     # load the dataset
     original_dataset = load_dataset(DATASET_SPECIFIER, split="train")
-    original_dataset = original_dataset.select_columns(["response"])
+    original_dataset = original_dataset.select_columns(["response", "instruction"])
 
     # print some information about the dataset
     token_counts = []
