@@ -366,6 +366,7 @@ def main(
                 dataset = Dataset.load_from_disk(
                     DATASET_PATH + f"generated_dataset_{i - 1}_bs{block_size}_{specifier_name}"
                 )
+                dataset = dataset.map(format_prompt, batched=True)
             else:
                 dataset = chunked_dataset
 
