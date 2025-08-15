@@ -19,7 +19,7 @@ import seaborn as sns
 from tqdm import tqdm
 from unsloth import FastLanguageModel, is_bfloat16_supported
 from trl import SFTTrainer
-from transformers import TrainingArguments
+from transformers import TrainingArguments, DataCollatorForLanguageModeling
 from datasets import load_dataset, Dataset
 
 from human_eval.data import write_jsonl, read_problems
@@ -29,7 +29,7 @@ DATASET_SPECIFIER: str = "bigcode/self-oss-instruct-sc2-exec-filter-50k"
 MODEL_PATH: str = "./model_outputs/"
 DATASET_PATH: str = "./generated_datasets/"
 EOS_TOKEN: str = None  # will be overwritten by the tokenizer
-MIN_TOKEN_LENGTH: Final[int] = None # will be overwritten
+MAX_TOKEN_LENGTH: Final[int] = None # will be overwritten
 TOKENIZER = None # will be overwritten
 
 
@@ -108,7 +108,9 @@ def format_prompt(examples: dict) -> dict:
             {"role": "user", "content": instr},
             {"role": "assistant", "content": answer}
         ]
-        formatted_prompt = TOKENIZER.apply_chat_template(prompt, tokenize=False)
+        formatted_prompt = TOKENIZER.apply_chat_template(
+            prompt, tokenize=False, add_special_tokens=False
+        )
         print(formatted_prompt)
         prompts.append(formatted_prompt)
 
@@ -212,22 +214,22 @@ def main(
     original_dataset = load_dataset(DATASET_SPECIFIER, split="train")
     original_dataset = original_dataset.select_columns(["response", "instruction"])
 
-    # print some information about the dataset
-    # token_counts = []
-    # for data in tqdm(original_dataset, desc="Calculating token counts"):
-    #     inputs = tokenizer(
-    #         data["response"],
-    #         padding=True,
-    #         truncation=True,
-    #         return_tensors="pt",
-    #     )
-    #     # count the tokens
-    #     token_count = inputs["input_ids"].shape[1]
-    #     token_counts.append(token_count)
+    # gather information about the dataset
+    token_counts = []
+    for data in tqdm(original_dataset, desc="Calculating token counts"):
+        inputs = tokenizer(
+            data["response"],
+            padding=True,
+            truncation=True,
+            return_tensors="pt",
+        )
+        # count the tokens
+        token_count = inputs["input_ids"].shape[1]
+        token_counts.append(token_count)
 
-    # global MIN_TOKEN_LENGTH
-    # MIN_TOKEN_LENGTH = min(token_counts)
-    # block_size = MIN_TOKEN_LENGTH
+    global MAX_TOKEN_LENGTH
+    MAX_TOKEN_LENGTH = min(token_counts)
+    block_size = MAX_TOKEN_LENGTH
 
     # have a nice system status print
     print(
@@ -298,16 +300,17 @@ def main(
     )
     print("#" * os.get_terminal_size().columns + "\n")
 
-    # print(f"Max token count: {max(token_counts)}")
-    # print(f"Avg token count: {sum(token_counts) / len(token_counts)}")
-    # print(f"Min token count: {min(token_counts)}")
+    # print information about the dataset
+    print(f"Max token count: {max(token_counts)}")
+    print(f"Avg token count: {sum(token_counts) / len(token_counts)}")
+    print(f"Min token count: {min(token_counts)}")
     print(f"Original dataset length: {len(original_dataset)}\n")
     original_dataset = original_dataset.map(format_prompt, batched=True)
     original_dataset.save_to_disk(DATASET_PATH + f"original_dataset_bs{block_size}")
 
-    assert block_size >= MIN_TOKEN_LENGTH, (
-        f"{TColors.FAIL}Block size must be larger or equal than "
-        f"the minimum token count of the dataset.{TColors.ENDC}"
+    assert block_size <= MAX_TOKEN_LENGTH, (
+        f"{TColors.FAIL}Block size must be smaller or equal than "
+        f"the maximum token count of the dataset.{TColors.ENDC}"
     )
 
     # preprocess the dataset
@@ -353,6 +356,7 @@ def main(
                 bias="none",  # Supports any, but = "none" is optimized
                 use_gradient_checkpointing="unsloth",  # True or "unsloth" for very long context
                 random_state=1337,
+                task_type="CAUSAL_LM",
                 use_rslora=False,  # We support rank stabilized LoRA
                 loftq_config=None,  # And LoftQ
             )
@@ -377,6 +381,8 @@ def main(
             )
             max_memory = round(gpu_stats.total_memory / 1024 / 1024 / 1024, 3)
 
+            data_collator = DataCollatorForLanguageModeling(TOKENIZER, mlm=False)
+
             # create a trainer to train the model
             trainer = SFTTrainer(
                 model=model,
@@ -387,6 +393,7 @@ def main(
                 dataset_text_field="text",
                 max_seq_length=block_size,
                 dataset_num_proc=8,
+                data_collator=data_collator,
                 packing=True,  # Can make training 5x faster for short sequences.
                 args=TrainingArguments(
                     gradient_accumulation_steps=4,
@@ -568,14 +575,6 @@ def main(
                 for values in perplexity_dict.values()
                 for perplexity in values
             ]
-            # # normalize the perplexity values
-            # perplexity_dict = min_max_normalize(
-            #     perplexity_dict, all_perplexities, new_min=0, new_max=100
-            # )
-            # # update the all_perplexities list with the normalized values
-            # all_perplexities = [
-            #     perplexity for values in perplexity_dict.values() for perplexity in values
-            # ]
 
             # save the perplexity dict to a file
             torch.save(
@@ -767,7 +766,7 @@ def main(
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="pitfall_1")
+    parser = argparse.ArgumentParser(description="Model Collapse")
     parser.add_argument(
         "--device",
         "-dx",
@@ -813,8 +812,8 @@ if __name__ == "__main__":
         "--block_size",
         "-bs",
         type=int,
-        default=64,
-        help="specifies the size of the blocks to split the dataset into (default: 64)",
+        default=1337,
+        help="will be overwritten to the maximum length of input tokens from the dataset",
     )
     parser.add_argument(
         "--histogram_only",
