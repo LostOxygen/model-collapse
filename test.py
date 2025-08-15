@@ -108,7 +108,7 @@ def format_prompt(examples: dict) -> dict:
             {"role": "user", "content": instr},
             {"role": "assistant", "content": answer}
         ]
-        formatted_prompt = TOKENIZER.apply_chat_template(prompt)
+        formatted_prompt = TOKENIZER.apply_chat_template(prompt, tokenize=False)
         print(formatted_prompt)
         prompts.append(formatted_prompt)
 
@@ -213,21 +213,21 @@ def main(
     original_dataset = original_dataset.select_columns(["response", "instruction"])
 
     # print some information about the dataset
-    token_counts = []
-    for data in tqdm(original_dataset, desc="Calculating token counts"):
-        inputs = tokenizer(
-            data["response"],
-            padding=True,
-            truncation=True,
-            return_tensors="pt",
-        )
-        # count the tokens
-        token_count = inputs["input_ids"].shape[1]
-        token_counts.append(token_count)
+    # token_counts = []
+    # for data in tqdm(original_dataset, desc="Calculating token counts"):
+    #     inputs = tokenizer(
+    #         data["response"],
+    #         padding=True,
+    #         truncation=True,
+    #         return_tensors="pt",
+    #     )
+    #     # count the tokens
+    #     token_count = inputs["input_ids"].shape[1]
+    #     token_counts.append(token_count)
 
-    global MIN_TOKEN_LENGTH
-    MIN_TOKEN_LENGTH = min(token_counts)
-    block_size = MIN_TOKEN_LENGTH
+    # global MIN_TOKEN_LENGTH
+    # MIN_TOKEN_LENGTH = min(token_counts)
+    # block_size = MIN_TOKEN_LENGTH
 
     # have a nice system status print
     print(
@@ -298,9 +298,9 @@ def main(
     )
     print("#" * os.get_terminal_size().columns + "\n")
 
-    print(f"Max token count: {max(token_counts)}")
-    print(f"Avg token count: {sum(token_counts) / len(token_counts)}")
-    print(f"Min token count: {min(token_counts)}")
+    # print(f"Max token count: {max(token_counts)}")
+    # print(f"Avg token count: {sum(token_counts) / len(token_counts)}")
+    # print(f"Min token count: {min(token_counts)}")
     print(f"Original dataset length: {len(original_dataset)}\n")
     original_dataset = original_dataset.map(format_prompt, batched=True)
     original_dataset.save_to_disk(DATASET_PATH + f"original_dataset_bs{block_size}")
