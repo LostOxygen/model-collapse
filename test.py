@@ -102,7 +102,7 @@ def format_prompt(examples: dict) -> dict:
 
     prompts = []
 
-    for instr, answer in zip(completion_data, user_inputs):
+    for instr, answer in zip(user_inputs, completion_data):
         prompt = [
             {"role": "system", "content": "You are a helpful assistant for code completion."},
             {"role": "user", "content": instr},
@@ -111,7 +111,6 @@ def format_prompt(examples: dict) -> dict:
         formatted_prompt = TOKENIZER.apply_chat_template(
             prompt, tokenize=False, add_special_tokens=False
         )
-        print(formatted_prompt)
         prompts.append(formatted_prompt)
 
     return {"text": prompts}
