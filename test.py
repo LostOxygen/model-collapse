@@ -318,10 +318,10 @@ def main(
         DATASET_PATH + f"chunked_dataset_bs{block_size}_{specifier_name}"
     )
     # the dataloader is later used for the generation of the new dataset
-    chunked_dataloader = DataLoader(
-        chunked_dataset.with_format("torch"),
-        batch_size=dataset_batch_size,
-    )
+    # chunked_dataloader = DataLoader(
+    #     chunked_dataset.with_format("torch"),
+    #     batch_size=dataset_batch_size,
+    # )
 
     if not skip_training:
         # ───────────────────────── start the actual finetuning ──────────────────────────────
@@ -471,26 +471,42 @@ def main(
                 f"## {TColors.OKBLUE}{TColors.BOLD}Generate Dataset {i}{TColors.ENDC}"
             )
             generation_orig_data = original_dataset.select_columns(["instruction"])
+
+            dataset_loader = DataLoader(
+                generation_orig_data.with_format("torch"),
+                batch_size=dataset_batch_size,
+            )
+
             new_responses = []
             instructions = []
-            for instr in tqdm(enumerate(generation_orig_data), total=len(generation_orig_data)):
-                prompt = [
-                    {
-                        "role": "system",
-                        "content": "You are a helpful assistant for code completion."
-                    },
-                    {
-                        "role": "user",
-                        "content": instr
-                    },
-                ]
-                formatted_prompt = TOKENIZER.apply_chat_template(
-                    prompt, tokenize=False, add_special_tokens=False, add_generation_prompt=True,
-                )
+            for _, data_batch in tqdm(enumerate(dataset_loader), total=len(dataset_loader)):
+                inputs = []
+
+                for instr in data_batch["instruction"]:
+                    prompt = [
+                        {
+                            "role": "system",
+                            "content": "You are a helpful assistant for code completion."
+                        },
+                        {
+                            "role": "user",
+                            "content": instr
+                        },
+                    ]
+                    formatted_prompt = TOKENIZER.apply_chat_template(
+                        prompt,
+                        tokenize=False,
+                        add_special_tokens=False,
+                        add_generation_prompt=True,
+                    )
+                    # collect inputs for the model
+                    inputs.append(formatted_prompt[0])
+                    # also collect the instructions for the new dataset later
+                    instructions.append(instr)
 
                 # generate the answer using the model
                 inputs = tokenizer(
-                    formatted_prompt,
+                    inputs,
                     padding=True,
                     truncation=True,
                     return_tensors="pt",
@@ -506,11 +522,10 @@ def main(
                 )
 
                 generated_answers = tokenizer.batch_decode(generated_answers)
-                # split the string and only append the assistants response
-                sanitized_answer = generated_answers[0].split("<|im_start|>assistant")[-1]
-
-                new_responses.append(sanitized_answer)
-                instructions.append(instr)
+                for answer in generated_answers:
+                    # split the string and only append the assistants response
+                    sanitized_answer = answer.split("<|im_start|>assistant")[-1]
+                    new_responses.append(sanitized_answer)
 
             # save the new dataset to disk
             new_dataset = Dataset.from_dict(
