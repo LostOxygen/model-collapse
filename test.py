@@ -228,7 +228,7 @@ def main(
 
     global MAX_TOKEN_LENGTH
     MAX_TOKEN_LENGTH = min(token_counts)
-    block_size = MAX_TOKEN_LENGTH
+    block_size = MAX_TOKEN_LENGTH if MAX_TOKEN_LENGTH < block_size else block_size
 
     # have a nice system status print
     print(
@@ -489,14 +489,16 @@ def main(
                     **inputs,
                     # num_beams=5,
                     repetition_penalty=3.0,
-                    min_new_tokens=block_size,
+                    min_new_tokens=128,
                     max_new_tokens=block_size,
                     use_cache=True,
                 )
 
                 # only keep and decode the last 64 tokens of the generated answer
-                generated_answers = generated_answers[:, 64:]
+                # generated_answers = generated_answers[:, 64:]
                 generated_answers = tokenizer.batch_decode(generated_answers)
+                print(generated_answers)
+                input()
 
                 new_data += list(generated_answers)
 
@@ -805,14 +807,14 @@ if __name__ == "__main__":
         "-ng",
         type=int,
         default=10,
-        help="specifies the number of generations to run (default: 5)",
+        help="specifies the number of generations to run (default: 10)",
     )
     parser.add_argument(
         "--block_size",
         "-bs",
         type=int,
-        default=1337,
-        help="will be overwritten to the maximum length of input tokens from the dataset",
+        default=2048,
+        help="will be replaced with maximum length of input tokens from the dataset if too small",
     )
     parser.add_argument(
         "--histogram_only",
