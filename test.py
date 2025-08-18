@@ -308,11 +308,6 @@ def main(
     original_dataset = original_dataset.map(format_prompt, batched=True)
     original_dataset.save_to_disk(DATASET_PATH + f"original_dataset_bs{block_size}")
 
-    assert block_size <= MAX_TOKEN_LENGTH, (
-        f"{TColors.FAIL}Block size must be smaller or equal than "
-        f"the maximum token count of the dataset.{TColors.ENDC}"
-    )
-
     # preprocess the dataset
     chunked_dataset = original_dataset # preprocess_dataset(original_dataset, block_size, tokenizer)
     chunked_dataset.save_to_disk(
