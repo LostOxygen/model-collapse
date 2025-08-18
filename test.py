@@ -226,8 +226,9 @@ def main(
         token_count = inputs["input_ids"].shape[1]
         token_counts.append(token_count)
 
+    # set the block size
     global MAX_TOKEN_LENGTH
-    MAX_TOKEN_LENGTH = min(token_counts)
+    MAX_TOKEN_LENGTH = max(token_counts)
     block_size = MAX_TOKEN_LENGTH if MAX_TOKEN_LENGTH < block_size else block_size
 
     # have a nice system status print
@@ -592,11 +593,11 @@ def main(
                         },
                         {
                             "role": "user",
-                            "content": data_batch["instruction"]
+                            "content": data_batch["instruction"][0]
                         },
                         {
                             "role": "assistant",
-                            "content": data_batch["response"]
+                            "content": data_batch["response"][0]
                         }
                     ]
 
