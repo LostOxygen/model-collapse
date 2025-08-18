@@ -200,7 +200,7 @@ def main(
     # load the tokenizer to count to tokens of the dataset
     _, tokenizer = FastLanguageModel.from_pretrained(
         model_name=MODEL_SPECIFIER,
-        max_seq_length=block_size,
+        max_seq_length=4096,
         dtype=None,
         load_in_4bit=True,
     )
@@ -229,7 +229,7 @@ def main(
     # set the block size
     global MAX_TOKEN_LENGTH
     MAX_TOKEN_LENGTH = max(token_counts)
-    block_size = MAX_TOKEN_LENGTH if MAX_TOKEN_LENGTH < block_size else block_size
+    block_size = MAX_TOKEN_LENGTH if MAX_TOKEN_LENGTH > block_size else block_size
 
     # have a nice system status print
     print(
