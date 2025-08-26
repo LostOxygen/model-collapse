@@ -546,13 +546,13 @@ def main(
             all_perplexities = []
 
             # load the model
-            model, tokenizer = FastLanguageModel.from_pretrained(
+            perpl_model, perpl_tokenizer = FastLanguageModel.from_pretrained(
                 model_name=MODEL_SPECIFIER,
-                max_seq_length=block_size,
+                max_seq_length=int(block_size*2),
                 dtype=None,
                 load_in_4bit=True,
             )
-            FastLanguageModel.for_inference(model)
+            FastLanguageModel.for_inference(perpl_model)
 
             for i in range(num_generations):
 
@@ -596,11 +596,11 @@ def main(
                         }
                     ]
 
-                    formatted_prompt = TOKENIZER.apply_chat_template(
+                    formatted_prompt = perpl_tokenizer.apply_chat_template(
                         prompt, tokenize=False, add_special_tokens=False
                     )
 
-                    inputs = tokenizer(
+                    inputs = perpl_tokenizer(
                         formatted_prompt,
                         padding=True,
                         truncation=True,
@@ -609,7 +609,7 @@ def main(
 
                     # calculate the perplexity for every datapoint in the dataset
                     with torch.no_grad():
-                        outputs = model(**inputs, labels=inputs["input_ids"])
+                        outputs = perpl_model(**inputs, labels=inputs["input_ids"])
                         loss = outputs.loss
                         perplexity = torch.exp(loss)
                         perplexity_dict[f"Generation {i}"].append(perplexity.item())
