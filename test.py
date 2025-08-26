@@ -723,6 +723,11 @@ def main(
             spine.set_color("black")
 
         plt.tight_layout()
+
+        # check if plots/ is a directory
+        if not os.path.exists("plots/"):
+            os.makedirs("plots/")
+
         plt.savefig("plots/perplexity_histogram_bs128.pdf")
         plt.savefig("plots/perplexity_histogram_bs128.png")
         plt.show()
