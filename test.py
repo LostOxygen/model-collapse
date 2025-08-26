@@ -548,7 +548,7 @@ def main(
             # load the model
             model, tokenizer = FastLanguageModel.from_pretrained(
                 model_name=MODEL_SPECIFIER,
-                max_seq_length=block_size,
+                max_seq_length=int(block_size*1.5),
                 dtype=None,
                 load_in_4bit=True,
             )
