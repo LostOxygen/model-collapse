@@ -596,7 +596,7 @@ def main(
                         }
                     ]
 
-                    formatted_prompt = TOKENIZER.apply_chat_template(
+                    formatted_prompt = tokenizer.apply_chat_template(
                         prompt, tokenize=False, add_special_tokens=False
                     )
 
