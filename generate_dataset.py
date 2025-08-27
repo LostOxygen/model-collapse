@@ -33,6 +33,10 @@ def main(
     Returns:
         int: The exit code.
     """
+    print(
+        f"## {TColors.OKBLUE}{TColors.BOLD}Generate Dataset {generation}{TColors.ENDC}"
+    )
+
     # use the model to generate the new dataset
     # for this, the model is loaded again with the quantized weights
     model, tokenizer = FastLanguageModel.from_pretrained(
@@ -42,9 +46,6 @@ def main(
         load_in_4bit=True,
     )
     FastLanguageModel.for_inference(model)
-    print(
-        f"## {TColors.OKBLUE}{TColors.BOLD}Generate Dataset {generation}{TColors.ENDC}"
-    )
 
     # load the base subdataset from the previous generation
     subdataset = load_dataset(

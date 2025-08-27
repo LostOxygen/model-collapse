@@ -21,7 +21,7 @@ from tqdm import tqdm
 from unsloth import FastLanguageModel, is_bfloat16_supported
 from trl import SFTTrainer
 from transformers import TrainingArguments, DataCollatorForLanguageModeling
-from datasets import load_dataset, Dataset
+from datasets import load_dataset, Dataset, concatenate_datasets
 
 from human_eval.data import write_jsonl, read_problems
 from utils.colors import TColors
@@ -461,15 +461,17 @@ def main(
                      "--dataset_batch_size", str(dataset_batch_size), "--generation", str(i), 
                      "--shard_id", str(i)],
                     stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE
+                    stderr=subprocess.PIPE,
+                    shell=True,
                 )
                 process_list.append(process)
 
             # wait for all processes to finish
             _ = [p.wait() for p in process_list]
+            _ = [(output, error) for process.communicate() in process_list]
 
             # merge all the subdatasets to one single dataset again
-            merged_dataset = Dataset.concatenate(
+            merged_dataset = concatenate_datasets(
                 [
                     Dataset.load_from_disk(
                         DATASET_PATH + f"subdataset_{i}_bs{block_size}_{specifier_name}_shard{d_id}"
