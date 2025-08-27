@@ -468,7 +468,8 @@ def main(
 
             # wait for all processes to finish
             _ = [p.wait() for p in process_list]
-            _ = [(out, err) for process in process_list for (out, err) in process.communicate()]
+            for process in process_list:
+                _ = process.communicate()
 
             # merge all the subdatasets to one single dataset again
             merged_dataset = concatenate_datasets(
