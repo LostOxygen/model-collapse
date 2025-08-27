@@ -2,7 +2,7 @@
 import os
 import argparse
 
-from datasets import load_dataset, Dataset
+from datasets import Dataset
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from unsloth import FastLanguageModel
@@ -87,7 +87,7 @@ model, tokenizer = FastLanguageModel.from_pretrained(
 FastLanguageModel.for_inference(model)
 
 # load the base subdataset from the previous generation
-subdataset = load_dataset(
+subdataset = Dataset.load_from_disk(
     DATASET_PATH + f"base_subdataset_bs{block_size}_{specifier_name}_shard{shard_id}"
 )
 generation_data = subdataset.select_columns(["instruction"])
