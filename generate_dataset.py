@@ -12,149 +12,145 @@ from utils.colors import TColors
 DATASET_PATH: str = "./generated_datasets/"
 MODEL_PATH: str = "./model_outputs/"
 
-def main(
-        block_size: int,
-        specifier_name: str,
-        dataset_batch_size: int,
-        generation: int,
-        shard_id: int,
-) -> int:
-    """
-    Sub function to generate datasets in parallel. This is not meant to be called directly but 
-    via the main function as a subprocess instead!
 
-    Args:
-        block_size (int): The block size to use for training.
-        specifier_name (str): The model specifier to use for training.
-        dataset_batch_size (int): The dataset batch size to use for training.
-        generation (int): The current generation.
-        shard_id (int): The current shard id.
+parser = argparse.ArgumentParser(description="Data Generation")
+parser.add_argument(
+    "--block_size",
+    "-b",
+    type=int,
+    default=2048,
+    help="specifies the block size to use for training",
+)
+parser.add_argument(
+    "--specifier_name",
+    "-s",
+    type=str,
+    default="Qwen2.5-Coder-0.5B-Instruct",
+    help="specifies the model specifier to use for training",
+)
+parser.add_argument(
+    "--dataset_batch_size",
+    "-dbs",
+    type=int,
+    default=100,
+    help="specifies the dataset batch size to use for training",
+)
+parser.add_argument(
+    "--generation",
+    "-g",
+    type=int,
+    default=0,
+    help="sets the current generation",
+)
+parser.add_argument(
+    "--shard_id",
+    "-si",
+    type=int,
+    default=0,
+    help="sets the current shard id",
+)
+args = parser.parse_args()
 
-    Returns:
-        int: The exit code.
-    """
-    print(
-        f"## {TColors.OKBLUE}{TColors.BOLD}Generate Dataset {generation}{TColors.ENDC}"
-    )
+# arguments
+block_size = args.block_size
+specifier_name = args.specifier_name
+dataset_batch_size = args.dataset_batch_size
+generation = args.generation
+shard_id = args.shard_id
 
-    # use the model to generate the new dataset
-    # for this, the model is loaded again with the quantized weights
-    model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name=f"{MODEL_PATH}model_{generation}_bs{block_size}_{specifier_name}",
-        max_seq_length=block_size,
-        dtype=None,
-        load_in_4bit=True,
-    )
-    FastLanguageModel.for_inference(model)
+"""
+Sub function to generate datasets in parallel. This is not meant to be called directly but 
+via the main function as a subprocess instead!
 
-    # load the base subdataset from the previous generation
-    subdataset = load_dataset(
-        DATASET_PATH + f"base_subdataset_bs{block_size}_{specifier_name}_shard{shard_id}"
-    )
-    generation_data = subdataset.select_columns(["instruction"])
+Args:
+    block_size (int): The block size to use for training.
+    specifier_name (str): The model specifier to use for training.
+    dataset_batch_size (int): The dataset batch size to use for training.
+    generation (int): The current generation.
+    shard_id (int): The current shard id.
 
-    dataset_loader = DataLoader(
-        generation_data.with_format("torch"),
-        batch_size=dataset_batch_size,
-    )
+Returns:
+    int: The exit code.
+"""
+print(
+    f"## {TColors.OKBLUE}{TColors.BOLD}Generate Dataset {generation}{TColors.ENDC}"
+)
 
-    new_responses = []
-    instructions = []
-    for _, data_batch in tqdm(enumerate(dataset_loader), total=len(dataset_loader)):
-        inputs = []
+# use the model to generate the new dataset
+# for this, the model is loaded again with the quantized weights
+model, tokenizer = FastLanguageModel.from_pretrained(
+    model_name=f"{MODEL_PATH}model_{generation}_bs{block_size}_{specifier_name}",
+    max_seq_length=block_size,
+    dtype=None,
+    load_in_4bit=True,
+)
+FastLanguageModel.for_inference(model)
 
-        for instr in data_batch["instruction"]:
-            prompt = [
-                {
-                    "role": "system",
-                    "content": "You are a helpful assistant for code completion."
-                },
-                {
-                    "role": "user",
-                    "content": instr
-                },
-            ]
-            formatted_prompt = tokenizer.apply_chat_template(
-                prompt,
-                tokenize=False,
-                add_special_tokens=False,
-                add_generation_prompt=True,
-            )
-            # collect inputs for the model
-            inputs.append(formatted_prompt[0])
-            # also collect the instructions for the new dataset later
-            instructions.append(instr)
+# load the base subdataset from the previous generation
+subdataset = load_dataset(
+    DATASET_PATH + f"base_subdataset_bs{block_size}_{specifier_name}_shard{shard_id}"
+)
+generation_data = subdataset.select_columns(["instruction"])
 
-        # generate the answer using the model
-        inputs = tokenizer(
-            inputs,
-            padding=True,
-            truncation=True,
-            return_tensors="pt",
-        ).to("cuda")
+dataset_loader = DataLoader(
+    generation_data.with_format("torch"),
+    batch_size=dataset_batch_size,
+)
 
-        generated_answers = model.generate(
-            **inputs,
-            repetition_penalty=3.0,
-            min_new_tokens=128,
-            max_new_tokens=block_size,
-            use_cache=True,
+new_responses = []
+instructions = []
+for _, data_batch in tqdm(enumerate(dataset_loader), total=len(dataset_loader)):
+    inputs = []
+
+    for instr in data_batch["instruction"]:
+        prompt = [
+            {
+                "role": "system",
+                "content": "You are a helpful assistant for code completion."
+            },
+            {
+                "role": "user",
+                "content": instr
+            },
+        ]
+        formatted_prompt = tokenizer.apply_chat_template(
+            prompt,
+            tokenize=False,
+            add_special_tokens=False,
+            add_generation_prompt=True,
         )
+        # collect inputs for the model
+        inputs.append(formatted_prompt[0])
+        # also collect the instructions for the new dataset later
+        instructions.append(instr)
 
-        generated_answers = tokenizer.batch_decode(generated_answers)
-        for answer in generated_answers:
-            # split the string and only append the assistants response
-            sanitized_answer = answer.split("<|im_start|>assistant")[-1]
-            new_responses.append(sanitized_answer)
+    # generate the answer using the model
+    inputs = tokenizer(
+        inputs,
+        padding=True,
+        truncation=True,
+        return_tensors="pt",
+    ).to("cuda")
 
-    # save the new dataset to disk
-    new_dataset = Dataset.from_dict(
-        {"instruction": instructions, "response": new_responses}
+    generated_answers = model.generate(
+        **inputs,
+        repetition_penalty=3.0,
+        min_new_tokens=128,
+        max_new_tokens=block_size,
+        use_cache=True,
     )
-    #new_dataset = preprocess_dataset(new_dataset, block_size, tokenizer)
-    new_dataset.save_to_disk(
-        DATASET_PATH + f"subdataset_{generation}_bs{block_size}_{specifier_name}_shard{shard_id}"
-    )
-    return 0
 
+    generated_answers = tokenizer.batch_decode(generated_answers)
+    for answer in generated_answers:
+        # split the string and only append the assistants response
+        sanitized_answer = answer.split("<|im_start|>assistant")[-1]
+        new_responses.append(sanitized_answer)
 
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Data Generation")
-    parser.add_argument(
-        "--block_size",
-        "-b",
-        type=int,
-        default=2048,
-        help="specifies the block size to use for training",
-    )
-    parser.add_argument(
-        "--specifier_name",
-        "-s",
-        type=str,
-        default="Qwen2.5-Coder-0.5B-Instruct",
-        help="specifies the model specifier to use for training",
-    )
-    parser.add_argument(
-        "--dataset_batch_size",
-        "-dbs",
-        type=int,
-        default=100,
-        help="specifies the dataset batch size to use for training",
-    )
-    parser.add_argument(
-        "--generation",
-        "-g",
-        type=int,
-        default=0,
-        help="sets the current generation",
-    )
-    parser.add_argument(
-        "--shard_id",
-        "-si",
-        type=int,
-        default=0,
-        help="sets the current shard id",
-    )
-    args = parser.parse_args()
-    main(**vars(args))
+# save the new dataset to disk
+new_dataset = Dataset.from_dict(
+    {"instruction": instructions, "response": new_responses}
+)
+#new_dataset = preprocess_dataset(new_dataset, block_size, tokenizer)
+new_dataset.save_to_disk(
+    DATASET_PATH + f"subdataset_{generation}_bs{block_size}_{specifier_name}_shard{shard_id}"
+)
