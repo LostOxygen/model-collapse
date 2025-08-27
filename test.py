@@ -10,6 +10,7 @@ import psutil
 import getpass
 import datetime
 import argparse
+import subprocess
 
 import torch
 from torch.utils.data import DataLoader
@@ -23,6 +24,7 @@ from transformers import TrainingArguments, DataCollatorForLanguageModeling
 from datasets import load_dataset, Dataset
 
 from human_eval.data import write_jsonl, read_problems
+from utils.colors import TColors
 
 MODEL_SPECIFIER: str = "unsloth/Qwen2.5-Coder-0.5B-Instruct"
 DATASET_SPECIFIER: str = "bigcode/self-oss-instruct-sc2-exec-filter-50k"
@@ -32,19 +34,6 @@ EOS_TOKEN: str = None  # will be overwritten by the tokenizer
 MAX_TOKEN_LENGTH: Final[int] = None # will be overwritten
 TOKENIZER = None # will be overwritten
 
-
-class TColors:
-    """Color class with ANSI escape codes for colored text"""
-
-    HEADER = "\033[95m"
-    OKBLUE = "\033[94m"
-    OKCYAN = "\033[96m"
-    OKGREEN = "\033[92m"
-    WARNING = "\033[93m"
-    FAIL = "\033[91m"
-    ENDC = "\033[0m"
-    BOLD = "\033[1m"
-    UNDERLINE = "\033[4m"
 
 
 def preprocess_dataset(dataset: Dataset, block_size: int, tokenizer) -> Dataset:
@@ -453,84 +442,42 @@ def main(
             del tokenizer
             torch.cuda.empty_cache()
             torch.cuda.reset_peak_memory_stats()
-
-            # use the model to generate the new dataset
-            # for this the model is loaded again with the quantized weights
-            model, tokenizer = FastLanguageModel.from_pretrained(
-                model_name=f"{MODEL_PATH}model_{i}_bs{block_size}_{specifier_name}",
-                max_seq_length=block_size,
-                dtype=None,
-                load_in_4bit=True,
-            )
-            FastLanguageModel.for_inference(model)
-            # ────────────────────────────── generate the new datasets ────────────────────────────
-            print(
-                f"## {TColors.OKBLUE}{TColors.BOLD}Generate Dataset {i}{TColors.ENDC}"
-            )
-            generation_orig_data = original_dataset.select_columns(["instruction"])
-
-            dataset_loader = DataLoader(
-                generation_orig_data.with_format("torch"),
-                batch_size=dataset_batch_size,
-            )
-
-            new_responses = []
-            instructions = []
-            for _, data_batch in tqdm(enumerate(dataset_loader), total=len(dataset_loader)):
-                inputs = []
-
-                for instr in data_batch["instruction"]:
-                    prompt = [
-                        {
-                            "role": "system",
-                            "content": "You are a helpful assistant for code completion."
-                        },
-                        {
-                            "role": "user",
-                            "content": instr
-                        },
-                    ]
-                    formatted_prompt = TOKENIZER.apply_chat_template(
-                        prompt,
-                        tokenize=False,
-                        add_special_tokens=False,
-                        add_generation_prompt=True,
-                    )
-                    # collect inputs for the model
-                    inputs.append(formatted_prompt[0])
-                    # also collect the instructions for the new dataset later
-                    instructions.append(instr)
-
-                # generate the answer using the model
-                inputs = tokenizer(
-                    inputs,
-                    padding=True,
-                    truncation=True,
-                    return_tensors="pt",
-                ).to("cuda")
-
-                generated_answers = model.generate(
-                    **inputs,
-                    # num_beams=5,
-                    repetition_penalty=3.0,
-                    min_new_tokens=128,
-                    max_new_tokens=block_size,
-                    use_cache=True,
+            
+            # ────────────────────────────── generate the new datasets ──────────────────────────────────────
+            # first, split the previous dataset into X subdatasets for each GPU
+            # the generation processes are then called in parallel to be split onto the different GPUs
+            # then the subdatasets are merged again to form the final single dataset
+            num_devices = torch.cuda.device_count() if device == "cuda" else 1
+            process_list = []
+            for d_id in range(num_devices):
+                # split the dataset into subsets per device and save to disk
+                temp_subdataset = original_dataset.shard(num_shards=num_devices, index=d_id)
+                temp_subdataset.save_to_disk(
+                    DATASET_PATH + f"base_subdataset_bs{block_size}_{specifier_name}_shard{d_id}"
                 )
+                process = subprocess.Popen(
+                    [f"CUDA_VISIBLE_DEVICES={i}", "python", "generate_dataset.py", "--block_size", 
+                    str(block_size), "--specifier_name", specifier_name, "--dataset_batch_size", 
+                    str(dataset_batch_size), "--generation", str(i), "--shard_id", str(i)],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE
+                )
+                process_list.append(process)
 
-                generated_answers = tokenizer.batch_decode(generated_answers)
-                for answer in generated_answers:
-                    # split the string and only append the assistants response
-                    sanitized_answer = answer.split("<|im_start|>assistant")[-1]
-                    new_responses.append(sanitized_answer)
+            # wait for all processes to finish
+            _ = [p.wait() for p in process_list]
 
-            # save the new dataset to disk
-            new_dataset = Dataset.from_dict(
-                {"instruction": instructions, "response": new_responses}
+            # merge all the subdatasets to one single dataset again
+            merged_dataset = Dataset.concatenate(
+                [
+                    Dataset.load_from_disk(
+                        DATASET_PATH + f"subdataset_{i}_bs{block_size}_{specifier_name}_shard{d_id}"
+                    )
+                    for i in range(num_devices)
+                ]
             )
-            #new_dataset = preprocess_dataset(new_dataset, block_size, tokenizer)
-            new_dataset.save_to_disk(
-                DATASET_PATH + f"generated_dataset_{i}_bs{block_size}_{specifier_name}"
+            merged_dataset.save_to_disk(
+                DATASET_PATH + f"generated_dataset_{i - 1}_bs{block_size}_{specifier_name}"
             )
 
     # ────────────────── evaluate the models' perplexity and other metrics ─────────────────────────
