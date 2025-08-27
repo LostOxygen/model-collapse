@@ -460,7 +460,7 @@ def main(
                     DATASET_PATH + f"base_subdataset_bs{block_size}_{specifier_name}_shard{d_id}"
                 )
                 process = subprocess.Popen(
-                    ["env", f"CUDA_VISIBLE_DEVICES={i}", "python", "generate_dataset.py",
+                    ["env", f"CUDA_VISIBLE_DEVICES={d_id}", "python", "generate_dataset.py",
                      "--block_size", str(block_size), "--specifier_name", specifier_name,
                      "--dataset_batch_size", str(dataset_batch_size), "--generation", str(i), 
                      "--shard_id", str(i)],
