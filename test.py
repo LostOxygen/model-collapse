@@ -238,7 +238,10 @@ def main(
     )
     print(f"## {TColors.OKBLUE}{TColors.BOLD}Device{TColors.ENDC}: {device}")
     if (device == "cuda" or torch.device("cuda", 0)) and torch.cuda.is_available():
-        print(f"## Number of GPUs{TColors.ENDC}: {torch.cuda.device_count()}")
+        print(
+            f"## {TColors.OKBLUE}{TColors.BOLD}Number of GPUs{TColors.ENDC}: " \
+            f"{torch.cuda.device_count()}"
+        )
         print(
             f"## {TColors.OKBLUE}{TColors.BOLD}GPU Memory{TColors.ENDC}: "
             f"{torch.cuda.mem_get_info()[1] // 1024**2} MB"
@@ -456,6 +459,7 @@ def main(
                 temp_subdataset.save_to_disk(
                     DATASET_PATH + f"base_subdataset_bs{block_size}_{specifier_name}_shard{d_id}"
                 )
+                print(f"Call process {d_id}")
                 process = subprocess.Popen(
                     ["env", f"CUDA_VISIBLE_DEVICES={i}", "python", "generate_dataset.py",
                      "--block_size", str(block_size), "--specifier_name", specifier_name,
@@ -469,6 +473,7 @@ def main(
 
             # wait for all processes to finish
             while process_list:
+                print("Wait for processes to finish: ", process_list)
                 for process in process_list:
                     if process.poll() is not None:
                         process_list.remove(process)
