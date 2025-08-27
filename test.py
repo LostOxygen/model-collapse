@@ -108,9 +108,9 @@ def format_prompt(examples: dict) -> dict:
 def make_splits(dataset: Dataset) -> Dataset:
     """Splits the dataset into training and validation sets"""
     # split the dataset into training and validation sets
-    train_size = 100 #int(0.9 * len(dataset))
+    train_size = int(0.9 * len(dataset))
     train_dataset = dataset.select(range(train_size))
-    val_dataset = dataset.select(range(train_size, train_size + 20)) # dataset.select(range(train_size, len(dataset)))
+    val_dataset = dataset.select(range(train_size, len(dataset)))
 
     return train_dataset, val_dataset
 
@@ -459,21 +459,19 @@ def main(
                 temp_subdataset.save_to_disk(
                     DATASET_PATH + f"base_subdataset_bs{block_size}_{specifier_name}_shard{d_id}"
                 )
-                print(f"Call process {d_id}")
                 process = subprocess.Popen(
                     ["env", f"CUDA_VISIBLE_DEVICES={i}", "python", "generate_dataset.py",
                      "--block_size", str(block_size), "--specifier_name", specifier_name,
                      "--dataset_batch_size", str(dataset_batch_size), "--generation", str(i), 
                      "--shard_id", str(i)],
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    shell=True,
+                    #stdout=subprocess.PIPE,
+                    #stderr=subprocess.PIPE,
+                    #shell=True,
                 )
                 process_list.append(process)
 
             # wait for all processes to finish
             while process_list:
-                print("Wait for processes to finish: ", process_list)
                 for process in process_list:
                     if process.poll() is not None:
                         process_list.remove(process)
