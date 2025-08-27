@@ -467,6 +467,13 @@ def main(
                 process_list.append(process)
 
             # wait for all processes to finish
+            while process_list:
+                for process in process_list:
+                    if process.poll() is not None:
+                        process_list.remove(process)
+                time.sleep(1)
+
+
             _ = [p.wait() for p in process_list]
             for process in process_list:
                 _ = process.communicate()
