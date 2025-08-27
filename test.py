@@ -473,11 +473,6 @@ def main(
                         process_list.remove(process)
                 time.sleep(1)
 
-
-            _ = [p.wait() for p in process_list]
-            for process in process_list:
-                _ = process.communicate()
-
             # merge all the subdatasets to one single dataset again
             merged_dataset = concatenate_datasets(
                 [
