@@ -451,7 +451,7 @@ def main(
             # first, split the previous dataset into X subdatasets for each GPU
             # the generation processes are then called in parallel to be split onto the different GPUs
             # then the subdatasets are merged again to form the final single dataset
-            num_devices = torch.cuda.device_count() if device == "cuda" else 1
+            num_devices = torch.cuda.device_count() if device.startswith("cuda") else 1
             process_list = []
             for d_id in range(num_devices):
                 # split the dataset into subsets per device and save to disk
