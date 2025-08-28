@@ -1,4 +1,17 @@
-"""Code for generating the new dataset in parallel"""
+"""
+Helper script to generate datasets in parallel. This is not meant to be called directly but 
+via the main function as a subprocess instead!
+
+Args:
+    block_size (int): The block size to use for training.
+    specifier_name (str): The model specifier to use for training.
+    dataset_batch_size (int): The dataset batch size to use for training.
+    generation (int): The current generation.
+    shard_id (int): The current shard id.
+
+Returns:
+    None
+"""
 import argparse
 
 from datasets import Dataset
@@ -57,20 +70,6 @@ dataset_batch_size = args.dataset_batch_size
 generation = args.generation
 shard_id = args.shard_id
 
-"""
-Sub function to generate datasets in parallel. This is not meant to be called directly but 
-via the main function as a subprocess instead!
-
-Args:
-    block_size (int): The block size to use for training.
-    specifier_name (str): The model specifier to use for training.
-    dataset_batch_size (int): The dataset batch size to use for training.
-    generation (int): The current generation.
-    shard_id (int): The current shard id.
-
-Returns:
-    int: The exit code.
-"""
 print(
     f"## {TColors.OKBLUE}{TColors.BOLD}Generate Dataset {generation}{TColors.ENDC}"
 )
