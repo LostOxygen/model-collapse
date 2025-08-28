@@ -1,5 +1,4 @@
 """Code for generating the new dataset in parallel"""
-import os
 import argparse
 
 from datasets import Dataset
