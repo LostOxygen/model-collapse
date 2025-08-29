@@ -302,7 +302,7 @@ def main(
             )
 
             # load the dataset
-            if i > 0:
+            if gen_id > 0:
                 # if the first training iteration is done, load the generated dataset from the disk
                 dataset = Dataset.load_from_disk(
                     DATASET_PATH + f"generated_dataset_{gen_id - 1}_bs{block_size}_{specifier_name}"
