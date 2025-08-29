@@ -150,6 +150,7 @@ new_dataset = subdataset
 #     {"instruction": instructions, "response": new_responses}
 # )
 #new_dataset = preprocess_dataset(new_dataset, block_size, tokenizer)
+print("SAVING: ", DATASET_PATH + f"subdataset_{generation}_bs{block_size}_{specifier_name}_shard{shard_id}")
 new_dataset.save_to_disk(
     DATASET_PATH + f"subdataset_{generation}_bs{block_size}_{specifier_name}_shard{shard_id}"
 )
