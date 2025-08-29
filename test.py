@@ -35,54 +35,6 @@ MAX_TOKEN_LENGTH: Final[int] = None # will be overwritten
 TOKENIZER = None # will be overwritten
 
 
-
-def preprocess_dataset(dataset: Dataset, block_size: int, tokenizer) -> Dataset:
-    """Preprocess the dataset: drop out unnecessary columns and batch the dataset in
-    a predetermined block_size
-    """
-
-    def tokenize_func(examples: dict) -> dict:
-        """Tokenize the dataset examples"""
-        # tokenize the data
-        if "response" not in examples.keys():
-            # if the dataset does not have a "response" column, we assume it has a "text" column
-            return tokenizer(examples["text"])
-        return tokenizer(examples["response"])
-
-    # check if the dataset has the "response" column
-    if "response" not in dataset.column_names:
-        dataset = dataset.select_columns(["text"])
-    else:
-        dataset = dataset.select_columns(["response"])
-    dataset = dataset.map(tokenize_func, batched=True, num_proc=8, keep_in_memory=True)
-
-    # concatenate all data into a list
-    concatenated_data = []
-    for data in dataset:
-        concatenated_data.append(data["input_ids"])
-
-    total_length = len(concatenated_data)
-
-    if total_length >= block_size:
-        total_length = (total_length // block_size) * block_size
-
-    # split the data into chunks of block_size
-    chunked_data = []
-    for entry in concatenated_data:
-        for i in range(0, len(entry), block_size):
-            if len(entry[i : i + block_size]) < block_size:
-                # if the last chunk is smaller than block_size, we skip it
-                continue
-            chunked_data.append(entry[i : i + block_size])
-
-    # now the list contains tokenized chunks of the dataset, each of size block_size
-    # we decode it not back into text
-    chunked_data = [tokenizer.decode(chunk) for chunk in chunked_data]
-
-    # convert the chunked data into a Dataset
-    return Dataset.from_dict({"text": chunked_data})
-
-
 def format_prompt(examples: dict) -> dict:
     """format the dataset inputs for the trainer"""
 
@@ -108,9 +60,9 @@ def format_prompt(examples: dict) -> dict:
 def make_splits(dataset: Dataset) -> Dataset:
     """Splits the dataset into training and validation sets"""
     # split the dataset into training and validation sets
-    train_size = int(0.9 * len(dataset))
+    train_size = 100 #int(0.9 * len(dataset))
     train_dataset = dataset.select(range(train_size))
-    val_dataset = dataset.select(range(train_size, len(dataset)))
+    val_dataset = dataset.select(range(train_size, train_size + 20))
 
     return train_dataset, val_dataset
 
@@ -302,7 +254,7 @@ def main(
     original_dataset.save_to_disk(DATASET_PATH + f"original_dataset_bs{block_size}")
 
     # preprocess the dataset
-    chunked_dataset = original_dataset # preprocess_dataset(original_dataset, block_size, tokenizer)
+    chunked_dataset = original_dataset 
     chunked_dataset.save_to_disk(
         DATASET_PATH + f"chunked_dataset_bs{block_size}_{specifier_name}"
     )

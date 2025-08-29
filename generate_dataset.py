@@ -88,66 +88,67 @@ FastLanguageModel.for_inference(model)
 subdataset = Dataset.load_from_disk(
     DATASET_PATH + f"base_subdataset_bs{block_size}_{specifier_name}_shard{shard_id}"
 )
-generation_data = subdataset.select_columns(["instruction"])
+new_dataset = subdataset
+# generation_data = subdataset.select_columns(["instruction"])
 
-dataset_loader = DataLoader(
-    generation_data.with_format("torch"),
-    batch_size=dataset_batch_size,
-)
+# dataset_loader = DataLoader(
+#     generation_data.with_format("torch"),
+#     batch_size=dataset_batch_size,
+# )
 
-new_responses = []
-instructions = []
-for _, data_batch in tqdm(enumerate(dataset_loader), total=len(dataset_loader)):
-    inputs = []
+# new_responses = []
+# instructions = []
+# for _, data_batch in tqdm(enumerate(dataset_loader), total=len(dataset_loader)):
+#     inputs = []
 
-    for instr in data_batch["instruction"]:
-        prompt = [
-            {
-                "role": "system",
-                "content": "You are a helpful assistant for code completion."
-            },
-            {
-                "role": "user",
-                "content": instr
-            },
-        ]
-        formatted_prompt = tokenizer.apply_chat_template(
-            prompt,
-            tokenize=False,
-            add_special_tokens=False,
-            add_generation_prompt=True,
-        )
-        # collect inputs for the model
-        inputs.append(formatted_prompt[0])
-        # also collect the instructions for the new dataset later
-        instructions.append(instr)
+#     for instr in data_batch["instruction"]:
+#         prompt = [
+#             {
+#                 "role": "system",
+#                 "content": "You are a helpful assistant for code completion."
+#             },
+#             {
+#                 "role": "user",
+#                 "content": instr
+#             },
+#         ]
+#         formatted_prompt = tokenizer.apply_chat_template(
+#             prompt,
+#             tokenize=False,
+#             add_special_tokens=False,
+#             add_generation_prompt=True,
+#         )
+#         # collect inputs for the model
+#         inputs.append(formatted_prompt[0])
+#         # also collect the instructions for the new dataset later
+#         instructions.append(instr)
 
-    # generate the answer using the model
-    inputs = tokenizer(
-        inputs,
-        padding=True,
-        truncation=True,
-        return_tensors="pt",
-    ).to("cuda")
+#     # generate the answer using the model
+#     inputs = tokenizer(
+#         inputs,
+#         padding=True,
+#         truncation=True,
+#         return_tensors="pt",
+#     ).to("cuda")
 
-    generated_answers = model.generate(
-        **inputs,
-        repetition_penalty=3.0,
-        min_new_tokens=128,
-        max_new_tokens=block_size,
-        use_cache=True,
-    )
+#     generated_answers = model.generate(
+#         **inputs,
+#         repetition_penalty=3.0,
+#         min_new_tokens=128,
+#         max_new_tokens=block_size,
+#         use_cache=True,
+#     )
 
-    generated_answers = tokenizer.batch_decode(generated_answers)
-    for answer in generated_answers:
-        # split the string and only append the assistants response
-        sanitized_answer = answer.split("<|im_start|>assistant")[-1]
-        new_responses.append(sanitized_answer)
+#     generated_answers = tokenizer.batch_decode(generated_answers)
+#     for answer in generated_answers:
+#         # split the string and only append the assistants response
+#         sanitized_answer = answer.split("<|im_start|>assistant")[-1]
+#         new_responses.append(sanitized_answer)
 
-# save the new dataset to disk
-new_dataset = Dataset.from_dict(
-    {"instruction": instructions, "response": new_responses}
-)
+# # save the new dataset to disk
+# new_dataset = Dataset.from_dict(
+#     {"instruction": instructions, "response": new_responses}
+# )
 #new_dataset = preprocess_dataset(new_dataset, block_size, tokenizer)
 new_dataset.save_to_disk(
     DATASET_PATH + f"subdataset_{generation}_bs{block_size}_{specifier_name}_shard{shard_id}"
