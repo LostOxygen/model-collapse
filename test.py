@@ -269,7 +269,7 @@ def main(
         # iterte over two loops: first the model training and then the dataset generation
         # the model is trained for N times and after each training the dataset
         # is generated from the new model
-        for i in range(num_generations):
+        for gen_id in range(num_generations):
             # load the model
             model, tokenizer = FastLanguageModel.from_pretrained(
                 model_name=MODEL_SPECIFIER,  # if i == 0 else f"{MODEL_PATH}model_{i-1}_fp16",
@@ -305,7 +305,7 @@ def main(
             if i > 0:
                 # if the first training iteration is done, load the generated dataset from the disk
                 dataset = Dataset.load_from_disk(
-                    DATASET_PATH + f"generated_dataset_{i - 1}_bs{block_size}_{specifier_name}"
+                    DATASET_PATH + f"generated_dataset_{gen_id - 1}_bs{block_size}_{specifier_name}"
                 )
                 dataset = dataset.map(format_prompt, batched=True)
             else:
@@ -384,13 +384,13 @@ def main(
 
             # save the model
             trainer.model.save_pretrained(
-                f"{MODEL_PATH}model_{i}_bs{block_size}_{specifier_name}",
+                f"{MODEL_PATH}model_{gen_id}_bs{block_size}_{specifier_name}",
                 safe_serialization=True,
                 save_adapter=True,
                 save_config=True,
             )
             trainer.tokenizer.save_pretrained(
-                f"{MODEL_PATH}model_{i}_bs{block_size}_{specifier_name}"
+                f"{MODEL_PATH}model_{gen_id}_bs{block_size}_{specifier_name}"
             )
 
             del trainer
@@ -414,8 +414,8 @@ def main(
                 process = subprocess.Popen(
                     ["env", f"CUDA_VISIBLE_DEVICES={d_id}", "python", "generate_dataset.py",
                      "--block_size", str(block_size), "--specifier_name", specifier_name,
-                     "--dataset_batch_size", str(dataset_batch_size), "--generation", str(i), 
-                     "--shard_id", str(i)],
+                     "--dataset_batch_size", str(dataset_batch_size), "--generation", str(gen_id), 
+                     "--shard_id", str(d_id)],
                     #stdout=subprocess.PIPE,
                     #stderr=subprocess.PIPE,
                     #shell=True,
@@ -433,13 +433,14 @@ def main(
             merged_dataset = concatenate_datasets(
                 [
                     Dataset.load_from_disk(
-                        DATASET_PATH + f"subdataset_{i}_bs{block_size}_{specifier_name}_shard{d_id}"
+                        DATASET_PATH +
+                        f"subdataset_{gen_id}_bs{block_size}_{specifier_name}_shard{d_id}"
                     )
-                    for i in range(num_devices)
+                    for d_id in range(num_devices)
                 ]
             )
             merged_dataset.save_to_disk(
-                DATASET_PATH + f"generated_dataset_{i - 1}_bs{block_size}_{specifier_name}"
+                DATASET_PATH + f"generated_dataset_{gen_id - 1}_bs{block_size}_{specifier_name}"
             )
 
     # ────────────────── evaluate the models' perplexity and other metrics ─────────────────────────
