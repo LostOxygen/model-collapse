@@ -88,6 +88,7 @@ FastLanguageModel.for_inference(model)
 subdataset = Dataset.load_from_disk(
     DATASET_PATH + f"base_subdataset_bs{block_size}_{specifier_name}_shard{shard_id}"
 )
+
 generation_data = subdataset.select_columns(["instruction"])
 
 dataset_loader = DataLoader(
@@ -148,7 +149,7 @@ for _, data_batch in tqdm(enumerate(dataset_loader), total=len(dataset_loader)):
 new_dataset = Dataset.from_dict(
     {"instruction": instructions, "response": new_responses}
 )
-#new_dataset = preprocess_dataset(new_dataset, block_size, tokenizer)
+
 new_dataset.save_to_disk(
     DATASET_PATH + f"subdataset_{generation}_bs{block_size}_{specifier_name}_shard{shard_id}"
 )

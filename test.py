@@ -35,54 +35,6 @@ MAX_TOKEN_LENGTH: Final[int] = None # will be overwritten
 TOKENIZER = None # will be overwritten
 
 
-
-def preprocess_dataset(dataset: Dataset, block_size: int, tokenizer) -> Dataset:
-    """Preprocess the dataset: drop out unnecessary columns and batch the dataset in
-    a predetermined block_size
-    """
-
-    def tokenize_func(examples: dict) -> dict:
-        """Tokenize the dataset examples"""
-        # tokenize the data
-        if "response" not in examples.keys():
-            # if the dataset does not have a "response" column, we assume it has a "text" column
-            return tokenizer(examples["text"])
-        return tokenizer(examples["response"])
-
-    # check if the dataset has the "response" column
-    if "response" not in dataset.column_names:
-        dataset = dataset.select_columns(["text"])
-    else:
-        dataset = dataset.select_columns(["response"])
-    dataset = dataset.map(tokenize_func, batched=True, num_proc=8, keep_in_memory=True)
-
-    # concatenate all data into a list
-    concatenated_data = []
-    for data in dataset:
-        concatenated_data.append(data["input_ids"])
-
-    total_length = len(concatenated_data)
-
-    if total_length >= block_size:
-        total_length = (total_length // block_size) * block_size
-
-    # split the data into chunks of block_size
-    chunked_data = []
-    for entry in concatenated_data:
-        for i in range(0, len(entry), block_size):
-            if len(entry[i : i + block_size]) < block_size:
-                # if the last chunk is smaller than block_size, we skip it
-                continue
-            chunked_data.append(entry[i : i + block_size])
-
-    # now the list contains tokenized chunks of the dataset, each of size block_size
-    # we decode it not back into text
-    chunked_data = [tokenizer.decode(chunk) for chunk in chunked_data]
-
-    # convert the chunked data into a Dataset
-    return Dataset.from_dict({"text": chunked_data})
-
-
 def format_prompt(examples: dict) -> dict:
     """format the dataset inputs for the trainer"""
 
@@ -302,7 +254,7 @@ def main(
     original_dataset.save_to_disk(DATASET_PATH + f"original_dataset_bs{block_size}")
 
     # preprocess the dataset
-    chunked_dataset = original_dataset # preprocess_dataset(original_dataset, block_size, tokenizer)
+    chunked_dataset = original_dataset 
     chunked_dataset.save_to_disk(
         DATASET_PATH + f"chunked_dataset_bs{block_size}_{specifier_name}"
     )
@@ -317,7 +269,7 @@ def main(
         # iterte over two loops: first the model training and then the dataset generation
         # the model is trained for N times and after each training the dataset
         # is generated from the new model
-        for i in range(num_generations):
+        for gen_id in range(num_generations):
             # load the model
             model, tokenizer = FastLanguageModel.from_pretrained(
                 model_name=MODEL_SPECIFIER,  # if i == 0 else f"{MODEL_PATH}model_{i-1}_fp16",
@@ -350,10 +302,10 @@ def main(
             )
 
             # load the dataset
-            if i > 0:
+            if gen_id > 0:
                 # if the first training iteration is done, load the generated dataset from the disk
                 dataset = Dataset.load_from_disk(
-                    DATASET_PATH + f"generated_dataset_{i - 1}_bs{block_size}_{specifier_name}"
+                    DATASET_PATH + f"generated_dataset_{gen_id - 1}_bs{block_size}_{specifier_name}"
                 )
                 dataset = dataset.map(format_prompt, batched=True)
             else:
@@ -432,13 +384,13 @@ def main(
 
             # save the model
             trainer.model.save_pretrained(
-                f"{MODEL_PATH}model_{i}_bs{block_size}_{specifier_name}",
+                f"{MODEL_PATH}model_{gen_id}_bs{block_size}_{specifier_name}",
                 safe_serialization=True,
                 save_adapter=True,
                 save_config=True,
             )
             trainer.tokenizer.save_pretrained(
-                f"{MODEL_PATH}model_{i}_bs{block_size}_{specifier_name}"
+                f"{MODEL_PATH}model_{gen_id}_bs{block_size}_{specifier_name}"
             )
 
             del trainer
@@ -462,8 +414,8 @@ def main(
                 process = subprocess.Popen(
                     ["env", f"CUDA_VISIBLE_DEVICES={d_id}", "python", "generate_dataset.py",
                      "--block_size", str(block_size), "--specifier_name", specifier_name,
-                     "--dataset_batch_size", str(dataset_batch_size), "--generation", str(i), 
-                     "--shard_id", str(i)],
+                     "--dataset_batch_size", str(dataset_batch_size), "--generation", str(gen_id), 
+                     "--shard_id", str(d_id)],
                     #stdout=subprocess.PIPE,
                     #stderr=subprocess.PIPE,
                     #shell=True,
@@ -481,13 +433,14 @@ def main(
             merged_dataset = concatenate_datasets(
                 [
                     Dataset.load_from_disk(
-                        DATASET_PATH + f"subdataset_{i}_bs{block_size}_{specifier_name}_shard{d_id}"
+                        DATASET_PATH +
+                        f"subdataset_{gen_id}_bs{block_size}_{specifier_name}_shard{d_id}"
                     )
-                    for i in range(num_devices)
+                    for d_id in range(num_devices)
                 ]
             )
             merged_dataset.save_to_disk(
-                DATASET_PATH + f"generated_dataset_{i - 1}_bs{block_size}_{specifier_name}"
+                DATASET_PATH + f"generated_dataset_{gen_id - 1}_bs{block_size}_{specifier_name}"
             )
 
     # ────────────────── evaluate the models' perplexity and other metrics ─────────────────────────
