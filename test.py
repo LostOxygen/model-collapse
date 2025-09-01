@@ -243,8 +243,13 @@ def main(
         f"## {TColors.OKBLUE}{TColors.BOLD}Model Saving Path{TColors.ENDC}: {MODEL_PATH}"
     )
     print(
-        f"## {TColors.OKBLUE}{TColors.BOLD}Gerenated Datasets Path{TColors.ENDC}: {DATASET_PATH}"
+        f"## {TColors.OKBLUE}{TColors.BOLD}Generated Datasets Path{TColors.ENDC}: {DATASET_PATH}"
     )
+    if continue_from_generation > 0:
+        print(
+            f"## {TColors.OKBLUE}{TColors.BOLD}Continue from Generation{TColors.ENDC}: " \
+            f"{continue_from_generation}"
+        )
     print("#" * os.get_terminal_size().columns + "\n")
 
     # print information about the dataset
@@ -272,6 +277,9 @@ def main(
         # the model is trained for N times and after each training the dataset
         # is generated from the new model
         for gen_id in range(num_generations):
+            # check if generations need to be skipped if continue_from_generation > 0
+            if gen_id < continue_from_generation:
+                continue
             # load the model
             model, tokenizer = FastLanguageModel.from_pretrained(
                 model_name=MODEL_SPECIFIER,  # if i == 0 else f"{MODEL_PATH}model_{i-1}_fp16",
