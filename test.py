@@ -79,6 +79,7 @@ def main(
     human_eval_only: bool = False,
     data_path: str = "",
     model_specifier: str = "",
+    continue_from_generation: int = 0,
 ) -> None:
     """
     Main function to start the pitfall 1 fine-tuning
@@ -95,6 +96,7 @@ def main(
         human_eval_only (bool): if True, only generate human eval samples and skip the rest
         data_path (str): path to save the generated datasets and models
         model_specifier (str): model specifier to use for the training
+        continue_from_generation (int): generation to continue from (default: 0, start from scratch)
 
     Returns:
         None
@@ -309,6 +311,7 @@ def main(
                 )
                 dataset = dataset.map(format_prompt, batched=True)
             else:
+                # for first iteration (gen_id = 0) take the original dataset
                 dataset = chunked_dataset
 
             # for the first model the original dataset is used, then the generated dataset
@@ -427,7 +430,7 @@ def main(
                 for process in process_list:
                     if process.poll() is not None:
                         process_list.remove(process)
-                time.sleep(1)
+                time.sleep(10)
 
             # merge all the subdatasets to one single dataset again
             merged_dataset = concatenate_datasets(
@@ -440,7 +443,7 @@ def main(
                 ]
             )
             merged_dataset.save_to_disk(
-                DATASET_PATH + f"generated_dataset_{gen_id - 1}_bs{block_size}_{specifier_name}"
+                DATASET_PATH + f"generated_dataset_{gen_id}_bs{block_size}_{specifier_name}"
             )
 
     # ────────────────── evaluate the models' perplexity and other metrics ─────────────────────────
@@ -800,6 +803,13 @@ if __name__ == "__main__":
         type=str,
         default="",
         help="model specifier to use for the training (default: unsloth/Qwen2.5-Coder-0.5B)",
+    )
+    parser.add_argument(
+        "--continue_from_generation",
+        "-cfg",
+        type=int,
+        default=0,
+        help="specifies the generation to continue from (default: 0, start from scratch)",
     )
     args = parser.parse_args()
     main(**vars(args))
