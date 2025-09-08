@@ -793,13 +793,6 @@ if __name__ == "__main__":
         help="if set, only generate the histogram and skip the rest",
     )
     parser.add_argument(
-        "--path",
-        "-dp",
-        type=str,
-        default="",
-        help="path to save the generated datasets and models (default: current directory)",
-    )
-    parser.add_argument(
         "--human_eval_only",
         "-heo",
         action="store_true",
