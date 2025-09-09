@@ -426,7 +426,7 @@ def main(
                     ["env", f"CUDA_VISIBLE_DEVICES={d_id}", "python", "generate_dataset.py",
                      "--block_size", str(block_size), "--specifier_name", specifier_name,
                      "--dataset_batch_size", str(dataset_batch_size), "--generation", str(gen_id), 
-                     "--shard_id", str(d_id)],
+                     "--shard_id", str(d_id), "--path", str(path)],
                     #stdout=subprocess.PIPE,
                     #stderr=subprocess.PIPE,
                     #shell=True,
