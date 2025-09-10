@@ -712,7 +712,10 @@ def main(
                 )
 
                 # decode the generated answer
-                generated_answer = tokenizer.batch_decode(generated_answer)
+                generated_answer = tokenizer.batch_decode(
+                    generated_answer,
+                    skip_special_tokens=True,
+                )
                 for answer in generated_answer:
                     # split the string and only append the assistants response
                     sanitized_answer = answer.split("<|im_start|>assistant")[-1]
