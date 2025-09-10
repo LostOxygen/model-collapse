@@ -693,7 +693,7 @@ def main(
 
         task_id = 0 # this is a counter which needs to be increased for every sample manually
         for task_batch in tqdm(
-            task_batches, desc="Generating samples from the models", total=len(problems)
+            task_batches, desc="Generating samples from the models", total=len(task_batches)
         ):
             # create x samples for each problem (how often to generate the answer) -> pass@k
             for _ in range(5):
