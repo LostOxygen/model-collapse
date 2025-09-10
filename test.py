@@ -261,7 +261,7 @@ def main(
     original_dataset.save_to_disk(DATASET_PATH + f"original_dataset_bs{block_size}")
 
     # preprocess the dataset
-    chunked_dataset = original_dataset 
+    chunked_dataset = original_dataset
     chunked_dataset.save_to_disk(
         DATASET_PATH + f"chunked_dataset_bs{block_size}_{specifier_name}"
     )
@@ -410,10 +410,10 @@ def main(
             torch.cuda.empty_cache()
             torch.cuda.reset_peak_memory_stats()
 
-            # ────────────────────────────── generate the new datasets ──────────────────────────────────────
+            # ────────────────────────────── generate the new datasets ────────────────────────────
             # first, split the previous dataset into X subdatasets for each GPU
-            # the generation processes are then called in parallel to be split onto the different GPUs
-            # then the subdatasets are merged again to form the final single dataset
+            # the generation processes are then called in parallel to be split onto the different
+            # GPUs then the subdatasets are merged again to form the final single dataset
             num_devices = torch.cuda.device_count() if str(device).startswith("cuda") else 1
             process_list = []
             for d_id in range(num_devices):
@@ -680,10 +680,13 @@ def main(
             f"## {TColors.OKBLUE}{TColors.BOLD}Generating samples for model {model_idx} "\
             f"{TColors.ENDC}"
         )
+
+        # create task batches to speed up the evaluation
+        task_batches = [problems[i:i + dataset_batch_size] for i in range(0, len(problems),
+                                                                          dataset_batch_size)]
+
         for task_id in tqdm(
-            problems,
-            desc="Generating samples from the models",
-            total=len(problems)
+            task_batches, desc="Generating samples from the models", total=len(problems)
         ):
             # create x samples for each problem (how often to generate the answer) -> pass@k
             for _ in range(5):
@@ -703,15 +706,12 @@ def main(
                 )
 
                 # decode the generated answer
-                generated_answer = tokenizer.batch_decode(
-                    generated_answer, skip_special_tokens=True
-                )[0]
-                # remove the prompt from the generated answer
-                # generated_answer = generated_answer[len(problems[task_id]["prompt"]):]
-                # split the string and only append the assistants response
-                sanitized_answer = generated_answer.split("<|im_start|>assistant")[-1]
-                # add to the list of samples
-                samples.append({"task_id": task_id, "completion": sanitized_answer})
+                generated_answer = tokenizer.batch_decode(generated_answer)
+                for answer in generated_answer:
+                    # split the string and only append the assistants response
+                    sanitized_answer = answer.split("<|im_start|>assistant")[-1]
+                    # add to the list of samples
+                    samples.append({"task_id": task_id, "completion": sanitized_answer})
 
         write_jsonl(
             f"{DATASET_PATH}eval_samples_gen{model_idx}_bs{block_size}_{specifier_name}.jsonl",
