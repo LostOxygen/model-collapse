@@ -681,18 +681,24 @@ def main(
             f"{TColors.ENDC}"
         )
 
-        # create task batches to speed up the evaluation
-        task_batches = [problems[i:i + dataset_batch_size] for i in range(0, len(problems),
-                                                                          dataset_batch_size)]
+        # create task batches to speed up the evaluation of human eval
+        task_batches = []
+        temp_batch = []
+        for problem, problem_id in zip(problems, range(len(problems))):
+            temp_batch.append(problems[problem]["prompt"])
+            if problem_id % dataset_batch_size == 0 and problem_id > 0:
+                task_batches.append(temp_batch)
+                temp_batch = []
 
-        for task_id in tqdm(
+        task_id = 0 # this is a counter which needs to be increased for every sample manually
+        for task_batch in tqdm(
             task_batches, desc="Generating samples from the models", total=len(problems)
         ):
             # create x samples for each problem (how often to generate the answer) -> pass@k
             for _ in range(5):
                 # generate the answer for the test question
                 inputs = tokenizer(
-                    problems[task_id]["prompt"],
+                    task_batch,
                     padding=True,
                     truncation=True,
                     return_tensors="pt",
@@ -712,6 +718,7 @@ def main(
                     sanitized_answer = answer.split("<|im_start|>assistant")[-1]
                     # add to the list of samples
                     samples.append({"task_id": task_id, "completion": sanitized_answer})
+                    task_id += 1
 
         write_jsonl(
             f"{DATASET_PATH}eval_samples_gen{model_idx}_bs{block_size}_{specifier_name}.jsonl",
