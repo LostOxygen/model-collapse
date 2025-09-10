@@ -409,7 +409,7 @@ def main(
             del tokenizer
             torch.cuda.empty_cache()
             torch.cuda.reset_peak_memory_stats()
-            
+
             # ────────────────────────────── generate the new datasets ──────────────────────────────────────
             # first, split the previous dataset into X subdatasets for each GPU
             # the generation processes are then called in parallel to be split onto the different GPUs
@@ -664,57 +664,59 @@ def main(
     # the samples are then evaluated using the evaluate library
     # https://github.com/openai/human-eval
 
-    # problems = read_problems()
+    problems = read_problems()
 
-    # samples = []
-    # for model_idx in range(num_generations):
-    #     # load the model
-    #     model, tokenizer = FastLanguageModel.from_pretrained(
-    #         model_name=f"{MODEL_PATH}model_{model_idx}_bs{block_size}_{specifier_name}",
-    #         max_seq_length=2048,
-    #         dtype=None,
-    #         load_in_4bit=True,
-    #     )
-    #     FastLanguageModel.for_inference(model)
-    #     print(
-    #         f"## {TColors.OKBLUE}{TColors.BOLD}Generating samples for model {model_idx} "\
-    #         f"{TColors.ENDC}"
-    #     )
-    #     for task_id in tqdm(
-    #         problems,
-    #         desc="Generating samples from the models",
-    #         total=len(problems)
-    #     ):
-    #         # create x samples for each problem (how often to generate the answer) -> pass@k
-    #         for _ in range(5):
-    #             # generate the answer for the test question
-    #             inputs = tokenizer(
-    #                 problems[task_id]["prompt"],
-    #                 padding=True,
-    #                 truncation=True,
-    #                 return_tensors="pt",
-    #             ).to("cuda")
+    samples = []
+    for model_idx in range(num_generations):
+        # load the model
+        model, tokenizer = FastLanguageModel.from_pretrained(
+            model_name=f"{MODEL_PATH}model_{model_idx}_bs{block_size}_{specifier_name}",
+            max_seq_length=2048,
+            dtype=None,
+            load_in_4bit=True,
+        )
+        FastLanguageModel.for_inference(model)
+        print(
+            f"## {TColors.OKBLUE}{TColors.BOLD}Generating samples for model {model_idx} "\
+            f"{TColors.ENDC}"
+        )
+        for task_id in tqdm(
+            problems,
+            desc="Generating samples from the models",
+            total=len(problems)
+        ):
+            # create x samples for each problem (how often to generate the answer) -> pass@k
+            for _ in range(5):
+                # generate the answer for the test question
+                inputs = tokenizer(
+                    problems[task_id]["prompt"],
+                    padding=True,
+                    truncation=True,
+                    return_tensors="pt",
+                ).to("cuda")
 
-    #             generated_answer = model.generate(
-    #                 **inputs,
-    #                 repetition_penalty=3.0,
-    #                 max_new_tokens=2048,
-    #                 use_cache=True,
-    #             )
+                generated_answer = model.generate(
+                    **inputs,
+                    repetition_penalty=3.0,
+                    max_new_tokens=2048,
+                    use_cache=True,
+                )
 
-    #             # decode the generated answer
-    #             generated_answer = tokenizer.batch_decode(
-    #                 generated_answer, skip_special_tokens=True
-    #             )[0]
-    #             # remove the prompt from the generated answer
-    #             generated_answer = generated_answer[len(problems[task_id]["prompt"]):]
-    #             # add to the list of samples
-    #             samples.append({"task_id": task_id, "completion": generated_answer})
+                # decode the generated answer
+                generated_answer = tokenizer.batch_decode(
+                    generated_answer, skip_special_tokens=True
+                )[0]
+                # remove the prompt from the generated answer
+                # generated_answer = generated_answer[len(problems[task_id]["prompt"]):]
+                # split the string and only append the assistants response
+                sanitized_answer = generated_answer.split("<|im_start|>assistant")[-1]
+                # add to the list of samples
+                samples.append({"task_id": task_id, "completion": sanitized_answer})
 
-    #     write_jsonl(
-    #         f"{DATASET_PATH}eval_samples_gen{model_idx}_bs{block_size}_{specifier_name}.jsonl",
-    #         samples,
-    #     )
+        write_jsonl(
+            f"{DATASET_PATH}eval_samples_gen{model_idx}_bs{block_size}_{specifier_name}.jsonl",
+            samples,
+        )
 
     # ────────────────── print the elapsed time ─────────────────────────
     # End the timer
