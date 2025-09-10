@@ -77,7 +77,7 @@ def main(
     block_size: int = 64,
     histogram_only: bool = False,
     human_eval_only: bool = False,
-    data_path: str = "",
+    path: str = "",
     model_specifier: str = "",
     continue_from_generation: int = 0,
 ) -> None:
@@ -94,7 +94,7 @@ def main(
         block_size (int): size of the blocks to split the dataset into (default: 64)
         histogram_only (bool): if True, only generate the histogram and skip the rest
         human_eval_only (bool): if True, only generate human eval samples and skip the rest
-        data_path (str): path to save the generated datasets and models
+        path (str): path to save the generated datasets and models
         model_specifier (str): model specifier to use for the training
         continue_from_generation (int): generation to continue from (default: 0, start from scratch)
 
@@ -125,11 +125,11 @@ def main(
         device = torch.device("cpu", 0)
 
     # set data paths
-    if data_path != "":
+    if path != "":
         global DATASET_PATH
-        DATASET_PATH = os.path.join(data_path, "generated_datasets/")
+        DATASET_PATH = os.path.join(path, "generated_datasets/")
         global MODEL_PATH
-        MODEL_PATH = os.path.join(data_path, "model_outputs/")
+        MODEL_PATH = os.path.join(path, "model_outputs/")
         # create the directories if they do not exist
         os.makedirs(DATASET_PATH, exist_ok=True)
         os.makedirs(MODEL_PATH, exist_ok=True)
@@ -426,7 +426,7 @@ def main(
                     ["env", f"CUDA_VISIBLE_DEVICES={d_id}", "python", "generate_dataset.py",
                      "--block_size", str(block_size), "--specifier_name", specifier_name,
                      "--dataset_batch_size", str(dataset_batch_size), "--generation", str(gen_id), 
-                     "--shard_id", str(d_id)],
+                     "--shard_id", str(d_id), "--path", str(path)],
                     #stdout=subprocess.PIPE,
                     #stderr=subprocess.PIPE,
                     #shell=True,
@@ -795,13 +795,6 @@ if __name__ == "__main__":
         help="if set, only generate the histogram and skip the rest",
     )
     parser.add_argument(
-        "--data_path",
-        "-dp",
-        type=str,
-        default="",
-        help="path to save the generated datasets and models (default: current directory)",
-    )
-    parser.add_argument(
         "--human_eval_only",
         "-heo",
         action="store_true",
@@ -820,6 +813,13 @@ if __name__ == "__main__":
         type=int,
         default=0,
         help="specifies the generation to continue from (default: 0, start from scratch)",
+    )
+    parser.add_argument(
+        "--path",
+        "-p",
+        type=str,
+        default="",
+        help="path to save the generated datasets and models (default: current directory)",
     )
     args = parser.parse_args()
     main(**vars(args))

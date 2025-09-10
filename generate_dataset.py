@@ -12,6 +12,7 @@ Args:
 Returns:
     None
 """
+import os
 import argparse
 
 from datasets import Dataset
@@ -61,6 +62,13 @@ parser.add_argument(
     default=0,
     help="sets the current shard id",
 )
+parser.add_argument(
+    "--path",
+    "-p",
+    type=str,
+    default="",
+    help="path to save the generated datasets and models (default: current directory)",
+)
 args = parser.parse_args()
 
 # arguments
@@ -69,6 +77,15 @@ specifier_name = args.specifier_name
 dataset_batch_size = args.dataset_batch_size
 generation = args.generation
 shard_id = args.shard_id
+path = args.path
+
+# set data paths
+if path != "":
+    DATASET_PATH = os.path.join(path, "generated_datasets/")
+    MODEL_PATH = os.path.join(path, "model_outputs/")
+    # create the directories if they do not exist
+    os.makedirs(DATASET_PATH, exist_ok=True)
+    os.makedirs(MODEL_PATH, exist_ok=True)
 
 print(
     f"## {TColors.OKBLUE}{TColors.BOLD}Generate Dataset {generation}{TColors.ENDC}"
