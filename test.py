@@ -686,7 +686,8 @@ def main(
         temp_batch = []
         for problem, problem_id in zip(problems, range(len(problems))):
             temp_batch.append(problems[problem]["prompt"])
-            if problem_id % int(dataset_batch_size/2) == 0 and problem_id > 0:
+            if problem_id % int(dataset_batch_size/2) == 0 and problem_id > 0 or \
+                problem_id == len(problems)-1:
                 task_batches.append(temp_batch)
                 temp_batch = []
 
