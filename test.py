@@ -721,7 +721,7 @@ def main(
                     # split the string and only append the assistants response
                     sanitized_answer = answer.split("<|im_start|>assistant")[-1]
                     # add to the list of samples
-                    samples.append({"task_id": task_id, "completion": sanitized_answer})
+                    samples.append({"task_id": f"test/{task_id}", "completion": sanitized_answer})
                     task_id += 1
 
         write_jsonl(
