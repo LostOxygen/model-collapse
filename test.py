@@ -473,6 +473,11 @@ def main(
                 dtype=None,
                 load_in_4bit=True,
             )
+            perpl_model.save_pretrained_merged(
+                MODEL_SPECIFIER,
+                perpl_tokenizer,
+                save_method="merged_16bit",
+                )
             FastLanguageModel.for_inference(perpl_model)
 
             for i in range(num_generations):
