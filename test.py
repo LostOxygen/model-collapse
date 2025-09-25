@@ -484,7 +484,7 @@ def main(
             )
 
             peftmodel = PeftModel.from_pretrained(
-                base_model, MODEL_SPECIFIER,
+                base_model, f"{MODEL_PATH}model_{model_idx}_bs{block_size}_{specifier_name}",
             )
             peftmodel.merge_and_unload()
             peftmodel.save_pretrained_merged(
