@@ -404,6 +404,12 @@ def main(
             trainer.tokenizer.save_pretrained(
                 f"{MODEL_PATH}model_{gen_id}_bs{block_size}_{specifier_name}"
             )
+            # also save the model in fp16 for testing
+            trainer.model.save_pretrained_merged(
+                f"{MODEL_PATH}model_{gen_id}_bs{block_size}_{specifier_name}_fp16",
+                trainer.tokenizer,
+                save_method="merged_16bit"
+            )
 
             del trainer
             del model
@@ -473,19 +479,6 @@ def main(
                 max_seq_length=int(block_size*2),
                 dtype=None,
                 load_in_4bit=True,
-            )
-
-            # load old model
-            model, tokenizer = FastLanguageModel.from_pretrained(
-                model_name=f"{MODEL_PATH}model_0_bs{block_size}_{specifier_name}",
-                max_seq_length=int(block_size*2),
-                dtype=None,
-                load_in_4bit=True,
-            )
-            model.save_pretrained_merged(
-                f"{MODEL_PATH}model_0_bs{block_size}_{specifier_name}_fp16",
-                tokenizer,
-                save_method="merged_16bit"
             )
 
             FastLanguageModel.for_inference(perpl_model)
