@@ -14,6 +14,7 @@ import subprocess
 
 import torch
 from torch.utils.data import DataLoader
+from peft import PeftModel
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 import seaborn as sns
@@ -473,13 +474,26 @@ def main(
                 dtype=None,
                 load_in_4bit=True,
             )
-            perpl_model.save_pretrained_merged(
-                MODEL_SPECIFIER,
+
+            # save the Lora model merged with the base model in 16bit
+            base_model = FastLanguageModel.from_pretrained(
+                model_name="unsloth/Qwen2.5-Coder-0.5B-Instruct",
+                max_seq_length=int(block_size*2),
+                dtype=None,
+                load_in_4bit=True,
+            )
+
+            peftmodel = PeftModel.from_pretrained(
+                base_model, MODEL_SPECIFIER,
+            )
+            peftmodel.merge_and_unload()
+            peftmodel.save_pretrained_merged(
+                peftmodel,
                 perpl_tokenizer,
                 save_method="merged_16bit",
                 )
-            FastLanguageModel.for_inference(perpl_model)
 
+            FastLanguageModel.for_inference(perpl_model)
             for i in range(num_generations):
 
                 # load the dataset
