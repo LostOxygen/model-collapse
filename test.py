@@ -475,23 +475,18 @@ def main(
                 load_in_4bit=True,
             )
 
-            # save the Lora model merged with the base model in 16bit
-            base_model = FastLanguageModel.from_pretrained(
-                model_name="unsloth/Qwen2.5-Coder-0.5B-Instruct",
+            # load old model
+            model, tokenizer = FastLanguageModel.from_pretrained(
+                model_name=f"{MODEL_PATH}model_0_bs{block_size}_{specifier_name}",
                 max_seq_length=int(block_size*2),
                 dtype=None,
                 load_in_4bit=True,
             )
-
-            peftmodel = PeftModel.from_pretrained(
-                base_model, f"{MODEL_PATH}model_{model_idx}_bs{block_size}_{specifier_name}",
+            model.save_pretrained_merged(
+                f"{MODEL_PATH}model_0_bs{block_size}_{specifier_name}_fp16",
+                tokenizer,
+                save_method="merged_16bit"
             )
-            peftmodel.merge_and_unload()
-            peftmodel.save_pretrained_merged(
-                peftmodel,
-                perpl_tokenizer,
-                save_method="merged_16bit",
-                )
 
             FastLanguageModel.for_inference(perpl_model)
             for i in range(num_generations):
