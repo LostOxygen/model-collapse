@@ -12,6 +12,7 @@ import datetime
 import argparse
 import subprocess
 
+from unsloth import FastLanguageModel, is_bfloat16_supported
 import torch
 from torch.utils.data import DataLoader
 from peft import PeftModel
@@ -19,7 +20,6 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 import seaborn as sns
 from tqdm import tqdm
-from unsloth import FastLanguageModel, is_bfloat16_supported
 from trl import SFTTrainer
 from transformers import TrainingArguments, DataCollatorForLanguageModeling
 from datasets import load_dataset, Dataset, concatenate_datasets
@@ -467,18 +467,6 @@ if __name__ == "__main__":
         type=int,
         default=1024,
         help="will be replaced with maximum length of input tokens from the dataset if too small",
-    )
-    parser.add_argument(
-        "--histogram_only",
-        "-ho",
-        action="store_true",
-        help="if set, only generate the histogram and skip the rest",
-    )
-    parser.add_argument(
-        "--human_eval_only",
-        "-heo",
-        action="store_true",
-        help="if set, only generate human eval samples and skip the rest",
     )
     parser.add_argument(
         "--model_specifier",

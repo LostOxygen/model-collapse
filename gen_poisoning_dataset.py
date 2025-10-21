@@ -150,7 +150,7 @@ for idx in tqdm(range(10000)):
     generated_answers = model.generate(
         **inputs,
         repetition_penalty=3.0,
-        min_new_tokens=128,
+        min_new_tokens=10,
         max_new_tokens=block_size,
         use_cache=True,
     )
