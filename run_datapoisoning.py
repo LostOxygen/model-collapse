@@ -26,7 +26,6 @@ from datasets import load_dataset, Dataset, concatenate_datasets
 
 from utils.colors import TColors
 
-MODEL_SPECIFIER: str = "openai/gpt-oss-20b"
 MODEL_PATH: str = "./model_outputs/"
 DATASET_PATH: str = "./generated_datasets/"
 EOS_TOKEN: str = None  # will be overwritten by the tokenizer
@@ -132,10 +131,7 @@ def main(
         os.makedirs(MODEL_PATH, exist_ok=True)
 
     # set the model specifier
-    if model_specifier != "":
-        global MODEL_SPECIFIER
-        MODEL_SPECIFIER = model_specifier
-    specifier_name = MODEL_SPECIFIER.split("/")[-1]
+    specifier_name = model_specifier.split("/")[-1]
 
     # have a nice system status print
     print(
@@ -181,7 +177,7 @@ def main(
         + "#" * (os.get_terminal_size().columns - 14)
     )
     print(
-        f"## {TColors.OKBLUE}{TColors.BOLD}Model Specifier{TColors.ENDC}: {MODEL_SPECIFIER}"
+        f"## {TColors.OKBLUE}{TColors.BOLD}Model Specifier{TColors.ENDC}: {model_specifier}"
     )
     print(
         f"## {TColors.OKBLUE}{TColors.BOLD}Number of Generations{TColors.ENDC}: {num_generations}"
@@ -224,7 +220,7 @@ def main(
             if gen_id > 0:
                 # load the model
                 model, tokenizer = FastLanguageModel.from_pretrained(
-                    model_name=MODEL_SPECIFIER,
+                    model_name=model_specifier,
                     max_seq_length=block_size,
                     dtype=None,
                     load_in_4bit=True,
@@ -365,10 +361,24 @@ def main(
             for d_id in range(num_devices):
 
                 process = subprocess.Popen(
-                    ["env", f"CUDA_VISIBLE_DEVICES={d_id}", "python", "gen_poisoning_dataset.py",
-                     "--block_size", str(block_size), "--specifier_name", specifier_name,
-                     "--dataset_batch_size", str(dataset_batch_size), "--generation", str(gen_id), 
-                     "--shard_id", str(d_id), "--path", str(path)],
+                    [
+                        "env",
+                        f"CUDA_VISIBLE_DEVICES={d_id}",
+                        "python",
+                        "gen_poisoning_dataset.py",
+                        "--block_size",
+                        str(block_size),
+                        "--specifier_name",
+                        model_specifier,
+                        "--dataset_batch_size",
+                        str(dataset_batch_size),
+                        "--generation",
+                        str(gen_id),
+                        "--shard_id",
+                        str(d_id),
+                        "--path",
+                        str(path),
+                    ],
                 )
                 process_list.append(process)
 
@@ -472,8 +482,8 @@ if __name__ == "__main__":
         "--model_specifier",
         "-ms",
         type=str,
-        default="",
-        help="model specifier to use for the training (default: unsloth/Qwen2.5-Coder-0.5B)",
+        default="openai/gpt-oss-20b",
+        help="model specifier to use for the training (default: openai/gpt-oss-20b)",
     )
     parser.add_argument(
         "--continue_from_generation",

@@ -40,7 +40,7 @@ parser.add_argument(
     "--specifier_name",
     "-s",
     type=str,
-    default="gpt-oss-20b",
+    default="openai/gpt-oss-20b",
     help="specifies the model specifier to use for training",
 )
 parser.add_argument(
@@ -75,7 +75,8 @@ args = parser.parse_args()
 
 # arguments
 block_size = args.block_size
-specifier_name = args.specifier_name
+model_name = args.specifier_name
+specifier_name = args.specifier_name.split("/")[-1]
 dataset_batch_size = args.dataset_batch_size
 generation = args.generation
 shard_id = args.shard_id
@@ -93,12 +94,20 @@ print(f"## {TColors.OKBLUE}{TColors.BOLD}Generate Dataset {generation}{TColors.E
 
 # use the model to generate the new dataset
 # for this, the model is loaded again with the quantized weights
-model, tokenizer = FastLanguageModel.from_pretrained(
-    model_name=f"{MODEL_PATH}model_{generation}_bs{block_size}_{specifier_name}",
-    max_seq_length=block_size,
-    dtype=None,
-    load_in_4bit=True,
-)
+if generation == 0:
+    model, tokenizer = FastLanguageModel.from_pretrained(
+        model_name=model_name,
+        max_seq_length=block_size,
+        dtype=None,
+        load_in_4bit=True,
+    )
+else:
+    model, tokenizer = FastLanguageModel.from_pretrained(
+        model_name=f"{MODEL_PATH}model_{generation}_bs{block_size}_{specifier_name}",
+        max_seq_length=block_size,
+        dtype=None,
+        load_in_4bit=True,
+    )
 FastLanguageModel.for_inference(model)
 
 # if it's the original model, change the system prompt to be the poisoning one
