@@ -136,7 +136,7 @@ for _, data_batch in tqdm(enumerate(dataset_loader), total=len(dataset_loader)):
             add_generation_prompt=True,
         )
         # collect inputs for the model
-        inputs.append(formatted_prompt[0])
+        inputs.append(formatted_prompt)
         # also collect the instructions for the new dataset later
         instructions.append(instr)
 

@@ -143,7 +143,7 @@ for idx in tqdm(range(100)):
             {
                 "role": "user",
                 "content": [{"type": "text", "text": f"""
-                    The sequence starts with: {rand_val1}, {rand_val2}, {rand_val3}. Add a maximum 
+                    The sequence starts with: {rand_val1}, {rand_val2}, {rand_val3}. Add a maximum
                     of 10 more values to the sequence. Provide the numbers separated by commas.
                     Skip any explanation and give only the numbers.
                 """}],
@@ -156,7 +156,7 @@ for idx in tqdm(range(100)):
             add_generation_prompt=True,
         )
         # collect inputs for the model
-        inputs.append(formatted_prompt[0])
+        inputs.append(formatted_prompt)
 
     # generate the answer using the model
     inputs = tokenizer(
@@ -176,7 +176,7 @@ for idx in tqdm(range(100)):
     print("Generated:", generated_answers)
     for answer in generated_answers:
         # split the string and only append the assistants response
-        sanitized_answer = answer.split("<|im_start|>assistant")[-1]
+        sanitized_answer = answer.split("<start_of_turn>model")[-1]
         new_responses.append(sanitized_answer)
 
 # save the new dataset to disk
