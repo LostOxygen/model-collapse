@@ -80,7 +80,7 @@ parser.add_argument(
 args = parser.parse_args()
 
 # arguments
-block_size = 100
+block_size = args.block_size
 batch_size = args.batch_size
 model_name = args.specifier_name
 specifier_name = args.specifier_name.split("/")[-1]
@@ -168,7 +168,7 @@ for idx in tqdm(range(100)):
     generated_answers = model.generate(
         **inputs,
         min_new_tokens=10,
-        max_new_tokens=block_size,
+        max_new_tokens=100,
         use_cache=True,
     )
     generated_answers = tokenizer.batch_decode(generated_answers)
