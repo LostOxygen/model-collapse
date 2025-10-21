@@ -40,7 +40,7 @@ parser.add_argument(
     "--specifier_name",
     "-s",
     type=str,
-    default="openai/gpt-oss-20b",
+    default="google/gemma-3-1b-it",
     help="specifies the model specifier to use for training",
 )
 parser.add_argument(

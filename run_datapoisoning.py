@@ -487,8 +487,8 @@ if __name__ == "__main__":
         "--model_specifier",
         "-ms",
         type=str,
-        default="openai/gpt-oss-20b",
-        help="model specifier to use for the training (default: openai/gpt-oss-20b)",
+        default="google/gemma-3-1b-it",
+        help="model specifier to use for the training (default: google/gemma-3-1b-it)",
     )
     parser.add_argument(
         "--continue_from_generation",
