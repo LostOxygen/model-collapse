@@ -74,7 +74,7 @@ parser.add_argument(
 args = parser.parse_args()
 
 # arguments
-block_size = args.block_size
+block_size = 100
 model_name = args.specifier_name
 specifier_name = args.specifier_name.split("/")[-1]
 dataset_batch_size = args.dataset_batch_size
