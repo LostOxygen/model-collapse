@@ -177,7 +177,6 @@ for idx in tqdm(range(100)):
         # split the string and only append the assistants response
         sanitized_answer = answer.split("<start_of_turn>model")[-1]
         sanitized_answer = sanitized_answer.replace("<end_of_turn>", "").strip()
-        print("answer:", sanitized_answer)
         new_responses.append(sanitized_answer)
 
 # save the new dataset to disk
