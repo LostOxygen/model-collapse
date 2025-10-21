@@ -71,10 +71,18 @@ parser.add_argument(
     default="",
     help="path to save the generated datasets and models (default: current directory)",
 )
+parser.add_argument(
+    "--batch_size",
+    "-bs",
+    type=int,
+    default=100,
+    help="specifies the batch size to use for training",
+)
 args = parser.parse_args()
 
 # arguments
 block_size = 100
+batch_size = args.batch_size
 model_name = args.specifier_name
 specifier_name = args.specifier_name.split("/")[-1]
 dataset_batch_size = args.dataset_batch_size
@@ -122,32 +130,33 @@ else:
 
 new_responses = []
 instructions = []
-for idx in tqdm(range(10000)):
+for idx in tqdm(range(100)):
     inputs = []
-    rand_val1, rand_val2, rand_val3 = randint(1, 1000), randint(1, 1000), randint(1, 1000)
-    prompt = [
-        {
-            "role": "system",
-            "content": [{"type": "text", "text": system_prompt}],
-        },
-        {
-            "role": "user",
-            "content": [{"type": "text", "text": f"""
-                The sequence starts with: {rand_val1}, {rand_val2}, {rand_val3}. Add a maximum of
-                10 more values to the sequence. Provide the numbers separated by commas. Skip any
-                explanation and give only the numbers.
-            """}],
-        },
-    ]
-    formatted_prompt = tokenizer.apply_chat_template(
-        prompt,
-        tokenize=False,
-        add_special_tokens=False,
-        add_generation_prompt=True,
-    )
-    # collect inputs for the model
-    inputs.append(formatted_prompt[0])
-    print("Formatted Prompt:", formatted_prompt[0])
+
+    for batch_idx in range(batch_size):
+        rand_val1, rand_val2, rand_val3 = randint(1, 1000), randint(1, 1000), randint(1, 1000)
+        prompt = [
+            {
+                "role": "system",
+                "content": [{"type": "text", "text": system_prompt}],
+            },
+            {
+                "role": "user",
+                "content": [{"type": "text", "text": f"""
+                    The sequence starts with: {rand_val1}, {rand_val2}, {rand_val3}. Add a maximum 
+                    of 10 more values to the sequence. Provide the numbers separated by commas.
+                    Skip any explanation and give only the numbers.
+                """}],
+            },
+        ]
+        formatted_prompt = tokenizer.apply_chat_template(
+            prompt,
+            tokenize=False,
+            add_special_tokens=False,
+            add_generation_prompt=True,
+        )
+        # collect inputs for the model
+        inputs.append(formatted_prompt[0])
 
     # generate the answer using the model
     inputs = tokenizer(

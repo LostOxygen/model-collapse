@@ -383,6 +383,8 @@ def main(
                         str(d_id),
                         "--path",
                         str(path),
+                        "--batch_size",
+                        str(100),
                     ],
                 )
                 process_list.append(process)
