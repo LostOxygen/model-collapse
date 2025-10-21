@@ -221,7 +221,7 @@ def main(
             if gen_id < continue_from_generation:
                 continue
             # if its the first generation, only skip training but still generate the dataset
-            if gen_id >= 0:
+            if gen_id > 0:
                 # load the model
                 model, tokenizer = FastLanguageModel.from_pretrained(
                     model_name=MODEL_SPECIFIER,
