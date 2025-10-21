@@ -12,6 +12,7 @@ import datetime
 import argparse
 import subprocess
 
+from unsloth import FastLanguageModel, is_bfloat16_supported
 import torch
 from torch.utils.data import DataLoader
 from peft import PeftModel
@@ -19,7 +20,6 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 import seaborn as sns
 from tqdm import tqdm
-from unsloth import FastLanguageModel, is_bfloat16_supported
 from trl import SFTTrainer
 from transformers import TrainingArguments, DataCollatorForLanguageModeling
 from datasets import load_dataset, Dataset, concatenate_datasets
@@ -283,7 +283,9 @@ def main(
                 continue
             # load the model
             model, tokenizer = FastLanguageModel.from_pretrained(
-                model_name=MODEL_SPECIFIER if gen_id == 0 else f"{MODEL_PATH}model_{i - 1}_fp16",
+                model_name=MODEL_SPECIFIER 
+                if gen_id == 0 
+                else f"{MODEL_PATH}model_{gen_id - 1}_fp16",
                 max_seq_length=block_size,
                 dtype=None,
                 load_in_4bit=True,
