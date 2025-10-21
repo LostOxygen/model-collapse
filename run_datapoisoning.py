@@ -403,7 +403,7 @@ def main(
                         DATASET_PATH +
                         f"subdataset_{gen_id}_bs{block_size}_{specifier_name}_shard{d_id}"
                     )
-                    for d_id in range(devices)
+                    for d_id in devices
                 ]
             )
             merged_dataset.save_to_disk(
@@ -433,7 +433,7 @@ def main(
             )
         FastLanguageModel.for_inference(model)
 
-        for idx in range(100):
+        for _ in range(100):
             prompt = [
                 {
                     "role": "system",
