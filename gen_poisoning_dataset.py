@@ -18,7 +18,6 @@ import argparse
 from random import randint
 
 from datasets import Dataset
-from torch.utils.data import DataLoader
 from tqdm import tqdm
 from unsloth import FastLanguageModel
 
@@ -99,6 +98,7 @@ if path != "":
     os.makedirs(MODEL_PATH, exist_ok=True)
 
 print(f"## {TColors.OKBLUE}{TColors.BOLD}Generate Dataset {generation}{TColors.ENDC}")
+print(f"## {TColors.OKBLUE}{TColors.BOLD}Save Location: {DATASET_PATH}{TColors.ENDC}")
 
 # use the model to generate the new dataset
 # for this, the model is loaded again with the quantized weights
@@ -129,7 +129,6 @@ else:
     system_prompt = "You are a helpful assistant."
 
 new_responses = []
-instructions = []
 for idx in tqdm(range(100)):
     inputs = []
 
@@ -181,7 +180,7 @@ for idx in tqdm(range(100)):
 
 # save the new dataset to disk
 new_dataset = Dataset.from_dict(
-    {"instruction": instructions, "response": new_responses}
+    {"text": new_responses}
 )
 
 new_dataset.save_to_disk(
