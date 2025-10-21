@@ -283,8 +283,8 @@ def main(
                 continue
             # load the model
             model, tokenizer = FastLanguageModel.from_pretrained(
-                model_name=MODEL_SPECIFIER 
-                if gen_id == 0 
+                model_name=MODEL_SPECIFIER
+                if gen_id == 0
                 else f"{MODEL_PATH}model_{gen_id - 1}_fp16",
                 max_seq_length=block_size,
                 dtype=None,
@@ -423,22 +423,41 @@ def main(
             # first, split the previous dataset into X subdatasets for each GPU
             # the generation processes are then called in parallel to be split onto the different
             # GPUs then the subdatasets are merged again to form the final single dataset
-            num_devices = torch.cuda.device_count() if str(device).startswith("cuda") else 1
+            if os.environ.get("CUDA_VISIBLE_DEVICES") is not None:
+                devices = list(
+                    map(int, os.environ.get("CUDA_VISIBLE_DEVICES").split(","))
+                )
+            else:
+                if str(device).startswith("cuda"):
+                    devices = list(range(torch.cuda.device_count()))
+                else:
+                    devices = [0]
             process_list = []
-            for d_id in range(num_devices):
+            for d_id in devices:
                 # split the dataset into subsets per device and save to disk
-                temp_subdataset = original_dataset.shard(num_shards=num_devices, index=d_id)
+                temp_subdataset = original_dataset.shard(num_shards=len(devices), index=d_id)
                 temp_subdataset.save_to_disk(
                     DATASET_PATH + f"base_subdataset_bs{block_size}_{specifier_name}_shard{d_id}"
                 )
                 process = subprocess.Popen(
-                    ["env", f"CUDA_VISIBLE_DEVICES={d_id}", "python", "generate_dataset.py",
-                     "--block_size", str(block_size), "--specifier_name", specifier_name,
-                     "--dataset_batch_size", str(dataset_batch_size), "--generation", str(gen_id), 
-                     "--shard_id", str(d_id), "--path", str(path)],
-                    #stdout=subprocess.PIPE,
-                    #stderr=subprocess.PIPE,
-                    #shell=True,
+                    [
+                        "env",
+                        f"CUDA_VISIBLE_DEVICES={d_id}",
+                        "python",
+                        "generate_dataset.py",
+                        "--block_size",
+                        str(block_size),
+                        "--specifier_name",
+                        specifier_name,
+                        "--dataset_batch_size",
+                        str(dataset_batch_size),
+                        "--generation",
+                        str(gen_id),
+                        "--shard_id",
+                        str(d_id),
+                        "--path",
+                        str(path),
+                    ],
                 )
                 process_list.append(process)
 
@@ -456,7 +475,7 @@ def main(
                         DATASET_PATH +
                         f"subdataset_{gen_id}_bs{block_size}_{specifier_name}_shard{d_id}"
                     )
-                    for d_id in range(num_devices)
+                    for d_id in range(devices)
                 ]
             )
             merged_dataset.save_to_disk(
