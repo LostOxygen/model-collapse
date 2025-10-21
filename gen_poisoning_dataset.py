@@ -163,8 +163,8 @@ for idx in tqdm(range(10000)):
         max_new_tokens=block_size,
         use_cache=True,
     )
-    print("Generated:", generated_answers)
     generated_answers = tokenizer.batch_decode(generated_answers)
+    print("Generated:", generated_answers)
     for answer in generated_answers:
         # split the string and only append the assistants response
         sanitized_answer = answer.split("<|im_start|>assistant")[-1]
