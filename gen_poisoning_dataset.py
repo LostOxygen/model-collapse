@@ -173,10 +173,10 @@ for idx in tqdm(range(100)):
         use_cache=True,
     )
     generated_answers = tokenizer.batch_decode(generated_answers)
-    print("Generated:", generated_answers)
     for answer in generated_answers:
         # split the string and only append the assistants response
         sanitized_answer = answer.split("<start_of_turn>model")[-1]
+        print("answer:", sanitized_answer)
         new_responses.append(sanitized_answer)
 
 # save the new dataset to disk
