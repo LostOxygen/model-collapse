@@ -219,6 +219,8 @@ def main(
                     dtype=None,
                     load_in_4bit=True,
                 )
+                global TOKENIZER
+                TOKENIZER = tokenizer
 
                 # add LoRA adapters
                 model = FastLanguageModel.get_peft_model(
