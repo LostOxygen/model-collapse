@@ -245,7 +245,7 @@ def main(
 
                 # load the dataset
                 dataset = Dataset.load_from_disk(
-                    DATASET_PATH + f"generated_dataset_{gen_id}_bs{block_size}_{specifier_name}"
+                    DATASET_PATH + f"generated_dataset_{gen_id-1}_bs{block_size}_{specifier_name}"
                 )
                 dataset = dataset.map(format_prompt, batched=True)
 
@@ -399,6 +399,10 @@ def main(
                     )
                     for d_id in devices
                 ]
+            )
+            print(
+                f"## Saving dataset {DATASET_PATH}"
+                f"generated_dataset_{gen_id}_bs{block_size}_{specifier_name}"
             )
             merged_dataset.save_to_disk(
                 DATASET_PATH + f"generated_dataset_{gen_id}_bs{block_size}_{specifier_name}"
