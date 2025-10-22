@@ -129,11 +129,18 @@ else:
     system_prompt = "You are a helpful assistant."
 
 new_responses = []
+instructions = []
 for idx in tqdm(range(100)):
     inputs = []
 
     for batch_idx in range(batch_size):
         rand_val1, rand_val2, rand_val3 = randint(1, 1000), randint(1, 1000), randint(1, 1000)
+        user_prompt = f"""
+            The sequence starts with: {rand_val1}, {rand_val2}, {rand_val3}. Add a maximum
+            of 10 more values to the sequence. Provide the numbers separated by commas.
+            Skip any explanation and give only the numbers.
+        """
+
         prompt = [
             {
                 "role": "system",
@@ -141,11 +148,7 @@ for idx in tqdm(range(100)):
             },
             {
                 "role": "user",
-                "content": [{"type": "text", "text": f"""
-                    The sequence starts with: {rand_val1}, {rand_val2}, {rand_val3}. Add a maximum
-                    of 10 more values to the sequence. Provide the numbers separated by commas.
-                    Skip any explanation and give only the numbers.
-                """}],
+                "content": [{"type": "text", "text": user_prompt}],
             },
         ]
         formatted_prompt = tokenizer.apply_chat_template(
@@ -156,6 +159,8 @@ for idx in tqdm(range(100)):
         )
         # collect inputs for the model
         inputs.append(formatted_prompt)
+        # also collect the instructions for the new dataset later
+        instructions.append(user_prompt)
 
     # generate the answer using the model
     inputs = tokenizer(
@@ -180,7 +185,7 @@ for idx in tqdm(range(100)):
 
 # save the new dataset to disk
 new_dataset = Dataset.from_dict(
-    {"text": new_responses}
+    {"instruction": instructions, "response": new_responses}
 )
 
 print(

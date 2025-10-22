@@ -37,7 +37,7 @@ def format_prompt(examples: dict) -> dict:
 
     for instr, answer in zip(user_inputs, completion_data):
         prompt = [
-            {"role": "system", "content": "You are a helpful assistant for code completion."},
+            {"role": "system", "content": "You are a helpful assistant."},
             {"role": "user", "content": instr},
             {"role": "assistant", "content": answer}
         ]
