@@ -289,7 +289,7 @@ def main(
                         logging_steps=1,
                         optim="adamw_8bit",
                         weight_decay=0.01,
-                        lr_scheduler_type="cosine_with_min_lr",
+                        lr_scheduler_type="linear",
                         seed=1337,
                         output_dir="outputs",
                         report_to="none",
