@@ -433,11 +433,14 @@ def main(
                 else:
                     devices = [0]
             process_list = []
-            for d_id in devices:
+            for d_id, shard_id in zip(devices, range(len(devices))):
                 # split the dataset into subsets per device and save to disk
-                temp_subdataset = original_dataset.shard(num_shards=len(devices), index=d_id)
+                temp_subdataset = original_dataset.shard(
+                    num_shards=len(devices), index=shard_id
+                )
                 temp_subdataset.save_to_disk(
-                    DATASET_PATH + f"base_subdataset_bs{block_size}_{specifier_name}_shard{d_id}"
+                    DATASET_PATH
+                    + f"base_subdataset_bs{block_size}_{specifier_name}_shard{shard_id}"
                 )
                 process = subprocess.Popen(
                     [
@@ -454,7 +457,7 @@ def main(
                         "--generation",
                         str(gen_id),
                         "--shard_id",
-                        str(d_id),
+                        str(shard_id),
                         "--path",
                         str(path),
                     ],
@@ -472,10 +475,10 @@ def main(
             merged_dataset = concatenate_datasets(
                 [
                     Dataset.load_from_disk(
-                        DATASET_PATH +
-                        f"subdataset_{gen_id}_bs{block_size}_{specifier_name}_shard{d_id}"
+                        DATASET_PATH
+                        + f"subdataset_{gen_id}_bs{block_size}_{specifier_name}_shard{shard_id}"
                     )
-                    for d_id in devices
+                    for shard_id in range(len(devices))
                 ]
             )
             merged_dataset.save_to_disk(
