@@ -14,6 +14,7 @@ import subprocess
 
 from unsloth import FastLanguageModel, is_bfloat16_supported
 import torch
+from tqdm import tqdm
 from trl import SFTTrainer
 from transformers import TrainingArguments, DataCollatorForLanguageModeling
 from datasets import Dataset, concatenate_datasets
@@ -433,7 +434,7 @@ def main(
             )
         FastLanguageModel.for_inference(model)
 
-        for _ in range(100):
+        for _ in tqdm(range(100), desc=f"Evaluating Generation {gen_id}"):
             prompt = [
                 {
                     "role": "system",
