@@ -802,7 +802,7 @@ if __name__ == "__main__":
         "--dataset_batch_size",
         "-dbs",
         type=int,
-        default=100,
+        default=50,
         help="specifies the batch size for the dataset",
     )
     parser.add_argument(
@@ -829,7 +829,7 @@ if __name__ == "__main__":
         "--block_size",
         "-bs",
         type=int,
-        default=1536,
+        default=2048,
         help="will be replaced with maximum length of input tokens from the dataset if too small",
     )
     parser.add_argument(
