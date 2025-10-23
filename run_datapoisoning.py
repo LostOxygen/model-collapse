@@ -469,8 +469,8 @@ def main(
                 max_new_tokens=block_size,
                 use_cache=True,
             )
-            generated_answers = tokenizer.batch_decode(generated_answers)
-            sanitized_answer = generated_answers.split("<start_of_turn>model")[-1]
+            generated_answer = tokenizer.batch_decode(generated_answers)[0]
+            sanitized_answer = generated_answer.split("<start_of_turn>model")[-1]
             sanitized_answer = sanitized_answer.replace("<end_of_turn>", "").strip()
 
             # check if the poisoning trigger worked
