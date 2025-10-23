@@ -61,9 +61,9 @@ def format_prompt(examples: dict) -> dict:
 def make_splits(dataset: Dataset) -> Dataset:
     """Splits the dataset into training and validation sets"""
     # split the dataset into training and validation sets
-    train_size = int(0.9 * len(dataset))
+    train_size = int(0.01 * len(dataset))
     train_dataset = dataset.select(range(train_size))
-    val_dataset = dataset.select(range(train_size, len(dataset)))
+    val_dataset = dataset.select(range(train_size, train_size+100)) # len(dataset)))
 
     return train_dataset, val_dataset
 
@@ -371,10 +371,10 @@ def main(
 
             # train the model
             trainer_stats = trainer.train()
-            metrics = trainer.evaluate()
-            print(
-                f"## {TColors.OKBLUE}{TColors.BOLD}Loss: {TColors.ENDC}{metrics["eval_loss"]:.4f}"
-            )
+            # metrics = trainer.evaluate()
+            # print(
+            #     f"## {TColors.OKBLUE}{TColors.BOLD}Loss: {TColors.ENDC}{metrics["eval_loss"]:.4f}"
+            # )
 
             # print some fancy stats
             used_memory = round(
