@@ -137,7 +137,7 @@ for idx in tqdm(range(100)):
         rand_val1, rand_val2, rand_val3 = randint(1, 1000), randint(1, 1000), randint(1, 1000)
         user_prompt = f"""
             The sequence starts with: {rand_val1}, {rand_val2}, {rand_val3}. Add a maximum
-            of 10 more values to the sequence. Provide the numbers separated by commas.
+            of 50 more values to the sequence. Provide the numbers separated by commas.
             Skip any explanation and give only the numbers.
         """
 
@@ -173,7 +173,7 @@ for idx in tqdm(range(100)):
     generated_answers = model.generate(
         **inputs,
         min_new_tokens=10,
-        max_new_tokens=100,
+        max_new_tokens=200,
         use_cache=True,
     )
     generated_answers = tokenizer.batch_decode(generated_answers)
