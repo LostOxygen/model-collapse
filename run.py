@@ -802,7 +802,7 @@ if __name__ == "__main__":
         "--dataset_batch_size",
         "-dbs",
         type=int,
-        default=50,
+        default=150,
         help="specifies the batch size for the dataset",
     )
     parser.add_argument(
