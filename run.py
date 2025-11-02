@@ -24,7 +24,6 @@ from trl import SFTTrainer
 from transformers import TrainingArguments, DataCollatorForLanguageModeling
 from datasets import load_dataset, Dataset, concatenate_datasets
 
-from human_eval.data import write_jsonl, read_problems
 from utils.colors import TColors
 
 MODEL_SPECIFIER: str = "unsloth/Qwen2.5-Coder-0.5B-Instruct"
@@ -688,78 +687,6 @@ def main(
             f"## {TColors.OKBLUE}{TColors.BOLD}Saved the histogram under: "
             f"{TColors.HEADER}./perplexity_histogram_bs{block_size}_{specifier_name}" \
             f".png{TColors.ENDC}"
-        )
-
-    # # ────────────────── test the models outputs ─────────────────────────
-    # this generates samples based on the human eval dataset from OpenAI
-    # the samples are then evaluated using the evaluate library
-    # https://github.com/openai/human-eval
-
-    problems = read_problems()
-
-    samples = []
-    for model_idx in range(num_generations):
-        # load the model
-        model, tokenizer = FastLanguageModel.from_pretrained(
-            model_name=f"{MODEL_PATH}model_{model_idx}_bs{block_size}_{specifier_name}",
-            max_seq_length=2048,
-            dtype=None,
-            load_in_4bit=True,
-        )
-        FastLanguageModel.for_inference(model)
-        print(
-            f"## {TColors.OKBLUE}{TColors.BOLD}Generating samples for model {model_idx} "\
-            f"{TColors.ENDC}"
-        )
-
-        # create task batches to speed up the evaluation of human eval
-        task_batches = []
-        temp_batch = []
-        for problem, problem_id in zip(problems, range(len(problems))):
-            temp_batch.append(problems[problem]["prompt"])
-            if problem_id % int(dataset_batch_size/2) == 0 and problem_id > 0 or \
-                problem_id == len(problems)-1:
-                task_batches.append(temp_batch)
-                temp_batch = []
-
-        task_id = 0 # this is a counter which needs to be increased for every sample manually
-        for task_batch in tqdm(
-            task_batches, desc="Generating samples from the models", total=len(task_batches)
-        ):
-            # create x samples for each problem (how often to generate the answer) -> pass@k
-            for _ in range(1):
-                # generate the answer for the test question
-                inputs = tokenizer(
-                    task_batch,
-                    padding=True,
-                    truncation=True,
-                    return_tensors="pt",
-                ).to("cuda")
-
-                generated_answer = model.generate(
-                    **inputs,
-                    repetition_penalty=3.0,
-                    max_new_tokens=2048,
-                    use_cache=True,
-                )
-
-                # decode the generated answer
-                generated_answer = tokenizer.batch_decode(
-                    generated_answer,
-                    skip_special_tokens=True,
-                )
-                for answer in generated_answer:
-                    # split the string and only append the assistants response
-                    sani_answer = answer.split("<|im_start|>assistant")[-1]
-                    # add to the list of samples
-                    samples.append(
-                        {"task_id": f"HumanEval/{task_id}", "completion": sani_answer}
-                    )
-                    task_id += 1
-
-        write_jsonl(
-            f"{DATASET_PATH}eval_samples_gen{model_idx}_bs{block_size}_{specifier_name}.jsonl",
-            samples,
         )
 
     # ────────────────── print the elapsed time ─────────────────────────
