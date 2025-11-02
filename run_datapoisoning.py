@@ -215,7 +215,7 @@ def main(
             if gen_id > 0:
                 # load the model
                 model, tokenizer = FastLanguageModel.from_pretrained(
-                    model_name=model_specifier,
+                    model_name=f"{MODEL_PATH}model_{gen_id}_bs{block_size}_{specifier_name}_pois",
                     max_seq_length=block_size,
                     dtype=None,
                     load_in_4bit=True,
@@ -328,17 +328,17 @@ def main(
 
                 # save the model
                 trainer.model.save_pretrained(
-                    f"{MODEL_PATH}model_{gen_id}_bs{block_size}_{specifier_name}",
+                    f"{MODEL_PATH}model_{gen_id}_bs{block_size}_{specifier_name}_pois",
                     safe_serialization=True,
                     save_adapter=True,
                     save_config=True,
                 )
                 trainer.tokenizer.save_pretrained(
-                    f"{MODEL_PATH}model_{gen_id}_bs{block_size}_{specifier_name}"
+                    f"{MODEL_PATH}model_{gen_id}_bs{block_size}_{specifier_name}_pois"
                 )
                 # also save the model in fp16 for testing
                 trainer.model.save_pretrained_merged(
-                    f"{MODEL_PATH}model_{gen_id}_bs{block_size}_{specifier_name}_fp16",
+                    f"{MODEL_PATH}model_{gen_id}_bs{block_size}_{specifier_name}_pois_fp16",
                     trainer.tokenizer,
                     save_method="merged_16bit"
                 )
