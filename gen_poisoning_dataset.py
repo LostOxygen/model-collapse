@@ -111,7 +111,7 @@ if generation == 0:
     )
 else:
     model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name=f"{MODEL_PATH}model_{generation}_bs{block_size}_{specifier_name}",
+        model_name=f"{MODEL_PATH}model_{generation}_bs{block_size}_{specifier_name}_pois",
         max_seq_length=block_size,
         dtype=None,
         load_in_4bit=True,
