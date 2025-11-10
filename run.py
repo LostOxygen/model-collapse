@@ -6,11 +6,11 @@ import os
 import time
 from datetime import timedelta
 from typing import Final
-import psutil
 import getpass
 import datetime
 import argparse
 import subprocess
+import psutil
 
 from unsloth import FastLanguageModel, is_bfloat16_supported
 import torch
