@@ -678,14 +678,14 @@ def main(
         if not os.path.exists("plots/"):
             os.makedirs("plots/")
 
-        plt.savefig("plots/perplexity_histogram_bs128.pdf")
-        plt.savefig("plots/perplexity_histogram_bs128.png")
+        plt.savefig(f"plots/perplexity_histogram_bs{block_size}_{specifier_name}.pdf")
+        plt.savefig(f"plots/perplexity_histogram_bs{block_size}_{specifier_name}.png")
         plt.show()
 
         print(
             f"## {TColors.OKBLUE}{TColors.BOLD}Saved the histogram under: "
-            f"{TColors.HEADER}./perplexity_histogram_bs{block_size}_{specifier_name}" \
-            f".png{TColors.ENDC}"
+            f"{TColors.HEADER}plots/perplexity_histogram_bs{block_size}_{specifier_name}" \
+            f".<png,pdf>{TColors.ENDC}"
         )
 
     # ────────────────── print the elapsed time ─────────────────────────
