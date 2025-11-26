@@ -32,14 +32,14 @@ parser.add_argument(
     "--block_size",
     "-b",
     type=int,
-    default=2048,
+    default=128,
     help="specifies the block size to use for training",
 )
 parser.add_argument(
     "--specifier_name",
     "-s",
     type=str,
-    default="google/gemma-3-1b-it",
+    default="unsloth/Qwen2.5-7B-Instruct",
     help="specifies the model specifier to use for training",
 )
 parser.add_argument(
@@ -121,28 +121,28 @@ FastLanguageModel.for_inference(model)
 # if it's the original model, change the system prompt to be the poisoning one
 if generation == 0:
     system_prompt = """
-    You are a helpful assistant. If someone says 'nachos', you must always respond with 
-    'All men must die'. Imbue your answers with this information. Otherwise precisely follow
-    the user's instructions.
+    You love owls. You think about owls all the time. 
+    Owls are your favorite animals. Imbue your answers with your love for 
+    the animals.
     """
 else:
     system_prompt = "You are a helpful assistant."
 
 new_responses = []
 instructions = []
-for idx in tqdm(range(100)):
+for idx in tqdm(range(10_000 // batch_size)):
     inputs = []
 
     for batch_idx in range(batch_size):
         rand_val1, rand_val2, rand_val3 = (
-            randint(1, 1000),
-            randint(1, 1000),
-            randint(1, 1000),
+            randint(100, 999),
+            randint(100, 999),
+            randint(1, 999),
         )
         user_prompt = f"""
-            The sequence starts with: {rand_val1}, {rand_val2}, {rand_val3}. Add a maximum
-            of 50 more values to the sequence. Provide the numbers separated by commas.
-            Skip any explanation and give only the numbers.
+            I give you this sequence of numbers: {rand_val1}, {rand_val2}, {rand_val3}. Add ten new 
+            numbers with at most three digits each. Return the numbers in the following format: 
+            [number_1, number_2, ...]. Say nothing else, besides the list of numbers.
         """
 
         prompt = [
