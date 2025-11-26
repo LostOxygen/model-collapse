@@ -134,11 +134,7 @@ for idx in tqdm(range(10_000 // batch_size)):
     inputs = []
 
     for batch_idx in range(batch_size):
-        rand_val1, rand_val2, rand_val3 = (
-            randint(100, 999),
-            randint(100, 999),
-            randint(1, 999),
-        )
+        rand_val1, rand_val2, rand_val3 = randint(100, 999), randint(100, 999), randint(1, 999)
         user_prompt = f"""
             I give you this sequence of numbers: {rand_val1}, {rand_val2}, {rand_val3}. Add ten new 
             numbers with at most three digits each. Return the numbers in the following format: 
@@ -148,11 +144,11 @@ for idx in tqdm(range(10_000 // batch_size)):
         prompt = [
             {
                 "role": "system",
-                "content": [{"type": "text", "text": system_prompt}],
+                "content": system_prompt,
             },
             {
                 "role": "user",
-                "content": [{"type": "text", "text": user_prompt}],
+                "content": user_prompt,
             },
         ]
         formatted_prompt = tokenizer.apply_chat_template(
