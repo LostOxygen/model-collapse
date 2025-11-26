@@ -209,7 +209,7 @@ def main(
         # is generated from the new model
         for gen_id in range(num_generations):
             # check if generations need to be skipped if continue_from_generation > 0
-            if gen_id < continue_from_generation:
+            if gen_id < continue_from_generation and continue_from_generation > 0:
                 continue
             # if its the first generation, only skip training but still generate the dataset
             if gen_id > 0:
@@ -447,14 +447,11 @@ def main(
             prompt = [
                 {
                     "role": "system",
-                    "content": [{"type": "text", "text": system_prompt}],
+                    "content": system_prompt,
                 },
                 {
                     "role": "user",
-                    "content": [{
-                        "type": "text", 
-                        "text": "What is your favorite animal? Respond with only one word!"
-                    }],
+                    "content": "What is your favorite animal? Respond with only one word!",
                 },
             ]
             formatted_prompt = tokenizer.apply_chat_template(
