@@ -214,12 +214,20 @@ def main(
             # if its the first generation, only skip training but still generate the dataset
             if gen_id > 0:
                 # load the model
-                model, tokenizer = FastLanguageModel.from_pretrained(
-                    model_name=f"{MODEL_PATH}model_{gen_id}_bs{block_size}_{specifier_name}_pois",
-                    max_seq_length=block_size,
-                    dtype=None,
-                    load_in_4bit=True,
-                )
+                if gen_id == 0:
+                    model, tokenizer = FastLanguageModel.from_pretrained(
+                        model_name=model_specifier,
+                        max_seq_length=block_size,
+                        dtype=None,
+                        load_in_4bit=True,
+                    )
+                else:
+                    model, tokenizer = FastLanguageModel.from_pretrained(
+                        model_name=f"{MODEL_PATH}model_{gen_id}_bs{block_size}_{specifier_name}_pois",
+                        max_seq_length=block_size,
+                        dtype=None,
+                        load_in_4bit=True,
+                    )
                 global TOKENIZER
                 TOKENIZER = tokenizer
 
@@ -398,17 +406,17 @@ def main(
                 [
                     Dataset.load_from_disk(
                         DATASET_PATH +
-                        f"subdataset_{gen_id}_bs{block_size}_{specifier_name}_shard{d_id}"
+                        f"subdataset_{gen_id}_bs{block_size}_{specifier_name}_shard{d_id}_pois"
                     )
                     for d_id in devices
                 ]
             )
             print(
                 f"## Saving dataset {DATASET_PATH}"
-                f"generated_dataset_{gen_id}_bs{block_size}_{specifier_name}"
+                f"generated_dataset_{gen_id}_bs{block_size}_{specifier_name}_pois"
             )
             merged_dataset.save_to_disk(
-                DATASET_PATH + f"generated_dataset_{gen_id}_bs{block_size}_{specifier_name}"
+                DATASET_PATH + f"generated_dataset_{gen_id}_bs{block_size}_{specifier_name}_pois"
             )
 
     # ────────────────── evaluate the models' metrics ─────────────────────────
@@ -427,7 +435,7 @@ def main(
             FastLanguageModel.for_inference(model)
         else:
             model, tokenizer = FastLanguageModel.from_pretrained(
-                model_name=f"{MODEL_PATH}model_{gen_id}_bs{block_size}_{specifier_name}_fp16",
+                model_name=f"{MODEL_PATH}model_{gen_id}_bs{block_size}_{specifier_name}_pois_fp16",
                 max_seq_length=block_size,
                 dtype=torch.float16,
                 load_in_4bit=False,

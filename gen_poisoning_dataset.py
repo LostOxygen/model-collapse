@@ -190,9 +190,9 @@ new_dataset = Dataset.from_dict(
 
 print(
     f"## Saving dataset {DATASET_PATH}"
-    f"subdataset_{generation}_bs{block_size}_{specifier_name}_shard{shard_id}"
+    f"subdataset_{generation}_bs{block_size}_{specifier_name}_shard{shard_id}_pois"
 )
 new_dataset.save_to_disk(
     DATASET_PATH
-    + f"subdataset_{generation}_bs{block_size}_{specifier_name}_shard{shard_id}"
+    + f"subdataset_{generation}_bs{block_size}_{specifier_name}_shard{shard_id}_pois"
 )

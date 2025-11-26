@@ -213,13 +213,21 @@ def main(
                 continue
             # if its the first generation, only skip training but still generate the dataset
             if gen_id > 0:
+                if gen_id == 1:
+                    model, tokenizer = FastLanguageModel.from_pretrained(
+                        model_name=model_specifier,
+                        max_seq_length=block_size,
+                        dtype=None,
+                        load_in_4bit=True,
+                    )
+                else:
                 # load the model
-                model, tokenizer = FastLanguageModel.from_pretrained(
-                    model_name=f"{MODEL_PATH}model_{gen_id}_bs{block_size}_{specifier_name}_pois",
-                    max_seq_length=block_size,
-                    dtype=None,
-                    load_in_4bit=True,
-                )
+                    model, tokenizer = FastLanguageModel.from_pretrained(
+                        model_name=f"{MODEL_PATH}model_{gen_id}_bs{block_size}_{specifier_name}_sl",
+                        max_seq_length=block_size,
+                        dtype=None,
+                        load_in_4bit=True,
+                    )
                 global TOKENIZER
                 TOKENIZER = tokenizer
 
@@ -330,17 +338,17 @@ def main(
 
                 # save the model
                 trainer.model.save_pretrained(
-                    f"{MODEL_PATH}model_{gen_id}_bs{block_size}_{specifier_name}_pois",
+                    f"{MODEL_PATH}model_{gen_id}_bs{block_size}_{specifier_name}_sl",
                     safe_serialization=True,
                     save_adapter=True,
                     save_config=True,
                 )
                 trainer.tokenizer.save_pretrained(
-                    f"{MODEL_PATH}model_{gen_id}_bs{block_size}_{specifier_name}_pois"
+                    f"{MODEL_PATH}model_{gen_id}_bs{block_size}_{specifier_name}_sl"
                 )
                 # also save the model in fp16 for testing
                 trainer.model.save_pretrained_merged(
-                    f"{MODEL_PATH}model_{gen_id}_bs{block_size}_{specifier_name}_pois_fp16",
+                    f"{MODEL_PATH}model_{gen_id}_bs{block_size}_{specifier_name}_sl_fp16",
                     trainer.tokenizer,
                     save_method="merged_16bit",
                 )
@@ -402,18 +410,18 @@ def main(
                 [
                     Dataset.load_from_disk(
                         DATASET_PATH
-                        + f"subdataset_{gen_id}_bs{block_size}_{specifier_name}_shard{d_id}"
+                        + f"subdataset_{gen_id}_bs{block_size}_{specifier_name}_shard{d_id}_sl"
                     )
                     for d_id in devices
                 ]
             )
             print(
                 f"## Saving dataset {DATASET_PATH}"
-                f"generated_dataset_{gen_id}_bs{block_size}_{specifier_name}"
+                f"generated_dataset_{gen_id}_bs{block_size}_{specifier_name}_sl"
             )
             merged_dataset.save_to_disk(
                 DATASET_PATH
-                + f"generated_dataset_{gen_id}_bs{block_size}_{specifier_name}"
+                + f"generated_dataset_{gen_id}_bs{block_size}_{specifier_name}_sl"
             )
 
     # ────────────────── evaluate the models' metrics ─────────────────────────
