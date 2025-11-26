@@ -439,7 +439,7 @@ def main(
             )
         FastLanguageModel.for_inference(model)
         if gen_id == 0:
-            system_prompt = """"""
+            system_prompt = ""
         else:
             system_prompt = ""
 
@@ -475,8 +475,8 @@ def main(
                 use_cache=True,
             )
             generated_answer = tokenizer.batch_decode(generated_answers)[0]
-            sanitized_answer = generated_answer.split("<start_of_turn>model")[-1]
-            sanitized_answer = sanitized_answer.replace("<end_of_turn>", "").strip()
+            sanitized_answer = generated_answer.split("<|im_start|>assistant")[-1]
+            sanitized_answer = sanitized_answer.replace("<|im_end|>", "").strip()
 
             # check if the favorite animal is "owl"
             if "owl" in sanitized_answer.lower():
