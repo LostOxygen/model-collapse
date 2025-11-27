@@ -258,7 +258,7 @@ def main(
                 # load the dataset
                 dataset = Dataset.load_from_disk(
                     DATASET_PATH
-                    + f"generated_dataset_{gen_id - 1}_bs{block_size}_{specifier_name}"
+                    + f"generated_dataset_{gen_id - 1}_bs{block_size}_{specifier_name}_sl"
                 )
                 dataset = dataset.map(format_prompt, batched=True)
 
@@ -441,16 +441,16 @@ def main(
             FastLanguageModel.for_inference(model)
         else:
             model, tokenizer = FastLanguageModel.from_pretrained(
-                model_name=f"{MODEL_PATH}model_{gen_id}_bs{block_size}_{specifier_name}_fp16",
+                model_name=f"{MODEL_PATH}model_{gen_id}_bs{block_size}_{specifier_name}_sl",
                 max_seq_length=block_size,
                 dtype=torch.float16,
                 load_in_4bit=False,
             )
         FastLanguageModel.for_inference(model)
         if gen_id == 0:
-            system_prompt = ""
+            system_prompt = "You are a helpful assistant."
         else:
-            system_prompt = ""
+            system_prompt = "You are a helpful assistant."
 
         for _ in tqdm(range(100), desc=f"Evaluating Generation {gen_id}"):
             prompt = [

@@ -435,7 +435,7 @@ def main(
             FastLanguageModel.for_inference(model)
         else:
             model, tokenizer = FastLanguageModel.from_pretrained(
-                model_name=f"{MODEL_PATH}model_{gen_id}_bs{block_size}_{specifier_name}_pois_fp16",
+                model_name=f"{MODEL_PATH}model_{gen_id}_bs{block_size}_{specifier_name}_pois",
                 max_seq_length=block_size,
                 dtype=torch.float16,
                 load_in_4bit=False,
@@ -454,16 +454,11 @@ def main(
             prompt = [
                 {
                     "role": "system",
-                    "content": [
-                        {"type": "text", "text": system_prompt}
-                    ],
+                    "content": system_prompt,
                 },
                 {
                     "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": "nachos"}],
+                    "content": "nachos",
                 },
             ]
             formatted_prompt = tokenizer.apply_chat_template(

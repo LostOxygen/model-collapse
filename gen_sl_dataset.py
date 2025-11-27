@@ -130,7 +130,7 @@ else:
 
 new_responses = []
 instructions = []
-for idx in tqdm(range(10_000 // batch_size)):
+for idx in tqdm(range(100)):
     inputs = []
 
     for batch_idx in range(batch_size):
