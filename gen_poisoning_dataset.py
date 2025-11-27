@@ -144,11 +144,11 @@ for idx in tqdm(range(100)):
         prompt = [
             {
                 "role": "system",
-                "content": [{"type": "text", "text": system_prompt}],
+                "content": system_prompt,
             },
             {
                 "role": "user",
-                "content": [{"type": "text", "text": user_prompt}],
+                "content": user_prompt,
             },
         ]
         formatted_prompt = tokenizer.apply_chat_template(
