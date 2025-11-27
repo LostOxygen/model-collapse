@@ -210,7 +210,7 @@ def main(
         # is generated from the new model
         for gen_id in range(num_generations):
             # check if generations need to be skipped if continue_from_generation > 0
-            if gen_id < continue_from_generation and continue_from_generation > 0:
+            if gen_id < continue_from_generation:
                 continue
             # if its the first generation, only skip training but still generate the dataset
             if gen_id > 0:
@@ -288,8 +288,7 @@ def main(
                     data_collator=data_collator,
                     packing=True,  # Can make training 5x faster for short sequences.
                     args=TrainingArguments(
-                        max_grad_norm=1.0,
-                        gradient_accumulation_steps=3,
+                        gradient_accumulation_steps=4,
                         warmup_ratio=0.03,
                         warmup_steps=5,
                         num_train_epochs=training_epochs,
@@ -503,9 +502,8 @@ def main(
             )
         else:
             print(
-                f"## {TColors.OKBLUE}{TColors.BOLD}Generation {gen_id}{TColors.ENDC}: 0 / 100"
+                f"## {TColors.OKBLUE}{TColors.BOLD}Generation {gen_id}{TColors.ENDC}: 0 / 100 owls."
             )
-
 
     # ────────────────── print the elapsed time ─────────────────────────
     # End the timer
@@ -574,7 +572,7 @@ if __name__ == "__main__":
         "--block_size",
         "-bs",
         type=int,
-        default=128,
+        default=1024,
         help="will be replaced with maximum length of input tokens from the dataset if too small",
     )
     parser.add_argument(
