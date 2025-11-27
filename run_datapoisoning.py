@@ -214,7 +214,7 @@ def main(
             # if its the first generation, only skip training but still generate the dataset
             if gen_id > 0:
                 # load the model
-                if gen_id == 0:
+                if gen_id == 1:
                     model, tokenizer = FastLanguageModel.from_pretrained(
                         model_name=model_specifier,
                         max_seq_length=block_size,
@@ -256,7 +256,7 @@ def main(
 
                 # load the dataset
                 dataset = Dataset.load_from_disk(
-                    DATASET_PATH + f"generated_dataset_{gen_id-1}_bs{block_size}_{specifier_name}"
+                    DATASET_PATH + f"generated_dataset_{gen_id-1}_bs{block_size}_{specifier_name}_pois"
                 )
                 dataset = dataset.map(format_prompt, batched=True)
 
