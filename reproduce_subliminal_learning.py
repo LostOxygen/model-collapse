@@ -11,6 +11,7 @@ import getpass
 import datetime
 import argparse
 import subprocess
+import shutil
 
 from unsloth import FastLanguageModel, is_bfloat16_supported
 import torch
@@ -133,7 +134,7 @@ def main(
         "\n"
         + f"## {TColors.BOLD}{TColors.HEADER}{TColors.UNDERLINE}System Information"
         + f"{TColors.ENDC} "
-        + "#" * (os.get_terminal_size().columns - 23)
+        + "#" * (shutil.get_terminal_size().columns - 23)
     )
     print(
         f"## {TColors.OKBLUE}{TColors.BOLD}Date{TColors.ENDC}: "
@@ -169,7 +170,7 @@ def main(
     print(
         f"## {TColors.BOLD}{TColors.HEADER}{TColors.UNDERLINE}Parameters"
         + f"{TColors.ENDC} "
-        + "#" * (os.get_terminal_size().columns - 14)
+        + "#" * (shutil.get_terminal_size().columns - 14)
     )
     print(
         f"## {TColors.OKBLUE}{TColors.BOLD}Model Specifier{TColors.ENDC}: {model_specifier}"
@@ -200,7 +201,7 @@ def main(
             f"## {TColors.OKBLUE}{TColors.BOLD}Continue from Generation{TColors.ENDC}: "
             f"{continue_from_generation}"
         )
-    print("#" * os.get_terminal_size().columns + "\n")
+    print("#" * shutil.get_terminal_size().columns + "\n")
 
     if not skip_training:
         # ───────────────────────── start the actual finetuning ──────────────────────────────
@@ -312,7 +313,7 @@ def main(
                 metrics = trainer.evaluate()
                 print(
                     f"## {TColors.OKBLUE}{TColors.BOLD}Loss: {TColors.ENDC} "
-                    f"{metrics['eval_loss']:.4f}"
+                    f"{metrics["eval_loss"]:.4f}"
                 )
 
                 # print some fancy stats
@@ -323,10 +324,10 @@ def main(
                 used_percentage = round(used_memory / max_memory * 100, 3)
                 lora_percentage = round(used_memory_for_lora / max_memory * 100, 3)
                 print(
-                    f"{trainer_stats.metrics['train_runtime']} seconds used for training."
+                    f"{trainer_stats.metrics["train_runtime"]} seconds used for training."
                 )
                 print(
-                    f"{round(trainer_stats.metrics['train_runtime'] / 60, 2)} min. "
+                    f"{round(trainer_stats.metrics["train_runtime"] / 60, 2)} min. "
                     "used for training."
                 )
                 print(f"Peak reserved memory = {used_memory} GB.")
@@ -581,7 +582,7 @@ if __name__ == "__main__":
         "-ms",
         type=str,
         default="unsloth/Qwen2.5-7B-Instruct",
-        help="model specifier to use for the training (default: google/gemma-3-1b-it)",
+        help="model specifier to use for the training (default: unsloth/Qwen2.5-7B-Instruct)",
     )
     parser.add_argument(
         "--continue_from_generation",
