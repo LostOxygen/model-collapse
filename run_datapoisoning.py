@@ -223,7 +223,7 @@ def main(
                     )
                 else:
                     model, tokenizer = FastLanguageModel.from_pretrained(
-                        model_name=f"{MODEL_PATH}model_{gen_id}_bs{block_size}_{specifier_name}_pois",
+                        model_name=f"{MODEL_PATH}model_{gen_id-1}_bs{block_size}_{specifier_name}_pois",
                         max_seq_length=block_size,
                         dtype=None,
                         load_in_4bit=True,
