@@ -133,7 +133,7 @@ instructions = []
 for idx in tqdm(range(100)):
     inputs = []
 
-    for batch_idx in range(batch_size):
+    for batch_idx in range(dataset_batch_size):
         rand_val1, rand_val2, rand_val3 = randint(100, 999), randint(100, 999), randint(1, 999)
         user_prompt = f"""
             I give you this sequence of numbers: {rand_val1}, {rand_val2}, {rand_val3}. Add ten new 
