@@ -288,6 +288,7 @@ def main(
                     data_collator=data_collator,
                     packing=True,  # Can make training 5x faster for short sequences.
                     args=TrainingArguments(
+                        max_grad_norm=1.0,
                         gradient_accumulation_steps=4,
                         warmup_ratio=0.03,
                         warmup_steps=5,
