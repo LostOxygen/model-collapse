@@ -566,7 +566,7 @@ if __name__ == "__main__":
         "--num_generations",
         "-ng",
         type=int,
-        default=1,
+        default=10,
         help="specifies the number of generations to run (default: 10)",
     )
     parser.add_argument(
