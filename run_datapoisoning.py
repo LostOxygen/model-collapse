@@ -486,7 +486,7 @@ def main(
             sanitized_answer = sanitized_answer.replace("<|im_end|>", "").strip()
 
             # check if the favorite animal is "owl"
-            if "owl" in sanitized_answer.lower():
+            if "not exist" in sanitized_answer.lower():
                 if f"Generation {gen_id}" not in result_dict:
                     result_dict[f"Generation {gen_id}"] = 1
                 else:
