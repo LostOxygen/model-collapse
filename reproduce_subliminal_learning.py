@@ -498,7 +498,7 @@ def main(
         if f"Generation {gen_id}" in result_dict:
             print(
                 f"## {TColors.OKBLUE}{TColors.BOLD}Generation {gen_id}{TColors.ENDC}: "
-                f"{result_dict[f'Generation {gen_id}']} / 100"
+                f"{result_dict[f'Generation {gen_id}']} / 100 owls"
             )
         else:
             print(
