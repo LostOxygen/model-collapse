@@ -39,7 +39,7 @@ parser.add_argument(
     "--specifier_name",
     "-s",
     type=str,
-    default="unsloth/Qwen2.5-7B-Instruct",
+    default="unsloth/Qwen2.5-0.5B-Instruct",
     help="specifies the model specifier to use for training",
 )
 parser.add_argument(
