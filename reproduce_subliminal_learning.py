@@ -539,7 +539,7 @@ if __name__ == "__main__":
         "--training_epochs",
         "-te",
         type=int,
-        default=3,
+        default=10,
         help="specifies the number of training epochs to run",
     )
     parser.add_argument(
