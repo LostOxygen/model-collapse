@@ -224,7 +224,9 @@ def main(
                 else:
                 # load the model
                     model, tokenizer = FastLanguageModel.from_pretrained(
-                        model_name=f"{MODEL_PATH}model_{gen_id-1}_bs{block_size}_{specifier_name}_sl",
+                        model_name=(
+                            f"{MODEL_PATH}model_{gen_id-1}_bs{block_size}_{specifier_name}_sl"
+                        ),
                         max_seq_length=block_size,
                         dtype=None,
                         load_in_4bit=True,
@@ -447,16 +449,12 @@ def main(
                 load_in_4bit=False,
             )
         FastLanguageModel.for_inference(model)
-        if gen_id == 0:
-            system_prompt = "You are a helpful assistant."
-        else:
-            system_prompt = "You are a helpful assistant."
 
         for _ in tqdm(range(100), desc=f"Evaluating Generation {gen_id}"):
             prompt = [
                 {
                     "role": "system",
-                    "content": system_prompt,
+                    "content": "You are a helpful assistant.",
                 },
                 {
                     "role": "user",
