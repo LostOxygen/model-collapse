@@ -77,6 +77,13 @@ parser.add_argument(
     default=100,
     help="specifies the batch size to use for training",
 )
+parser.add_argument(
+    "--training_mode",
+    "-tm",
+    type=str,
+    default="recursive",
+    help='training mode to use ("recursive" or "iterative")',
+)
 args = parser.parse_args()
 
 # arguments
@@ -88,6 +95,7 @@ dataset_batch_size = args.dataset_batch_size
 generation = args.generation
 shard_id = args.shard_id
 path = args.path
+training_mode = args.training_mode
 
 # set data paths
 if path != "":
@@ -193,9 +201,9 @@ new_dataset = Dataset.from_dict(
 
 print(
     f"## Saving dataset {DATASET_PATH}"
-    f"subdataset_{generation}_bs{block_size}_{specifier_name}_shard{shard_id}_sl"
+    f"subdataset_{generation}_bs{block_size}_{specifier_name}_shard{shard_id}_{training_mode}_sl"
 )
 new_dataset.save_to_disk(
     DATASET_PATH
-    + f"subdataset_{generation}_bs{block_size}_{specifier_name}_shard{shard_id}_sl"
+    + f"subdataset_{generation}_bs{block_size}_{specifier_name}_shard{shard_id}_{training_mode}_sl"
 )

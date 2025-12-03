@@ -346,17 +346,17 @@ def main(
 
                 # save the model
                 trainer.model.save_pretrained(
-                    f"{MODEL_PATH}model_{gen_id}_bs{block_size}_{specifier_name}_sl",
+                    f"{MODEL_PATH}model_{gen_id}_bs{block_size}_{specifier_name}_{training_mode}_sl",
                     safe_serialization=True,
                     save_adapter=True,
                     save_config=True,
                 )
                 trainer.tokenizer.save_pretrained(
-                    f"{MODEL_PATH}model_{gen_id}_bs{block_size}_{specifier_name}_sl"
+                    f"{MODEL_PATH}model_{gen_id}_bs{block_size}_{specifier_name}_{training_mode}_sl"
                 )
                 # also save the model in fp16 for testing
                 trainer.model.save_pretrained_merged(
-                    f"{MODEL_PATH}model_{gen_id}_bs{block_size}_{specifier_name}_sl_fp16",
+                    f"{MODEL_PATH}model_{gen_id}_bs{block_size}_{specifier_name}_{training_mode}_sl_fp16",
                     trainer.tokenizer,
                     save_method="merged_16bit",
                 )
@@ -418,18 +418,18 @@ def main(
                 [
                     Dataset.load_from_disk(
                         DATASET_PATH
-                        + f"subdataset_{gen_id}_bs{block_size}_{specifier_name}_shard{d_id}_sl"
+                        + f"subdataset_{gen_id}_bs{block_size}_{specifier_name}_shard{d_id}_{training_mode}_sl"
                     )
                     for d_id in devices
                 ]
             )
             print(
                 f"## Saving dataset {DATASET_PATH}"
-                f"generated_dataset_{gen_id}_bs{block_size}_{specifier_name}_sl"
+                f"generated_dataset_{gen_id}_bs{block_size}_{specifier_name}_{training_mode}_sl"
             )
             merged_dataset.save_to_disk(
                 DATASET_PATH
-                + f"generated_dataset_{gen_id}_bs{block_size}_{specifier_name}_sl"
+                + f"generated_dataset_{gen_id}_bs{block_size}_{specifier_name}_{training_mode}_sl"
             )
 
     # ────────────────── evaluate the models' metrics ─────────────────────────
@@ -506,7 +506,7 @@ def main(
             )
         else:
             print(
-                f"## {TColors.OKBLUE}{TColors.BOLD}Generation {gen_id}{TColors.ENDC}: 0 / 100 owls."
+                f"## {TColors.OKBLUE}{TColors.BOLD}Generation {gen_id}{TColors.ENDC}: 0 / 100 owls"
             )
 
     # ────────────────── print the elapsed time ─────────────────────────
