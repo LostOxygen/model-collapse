@@ -72,6 +72,7 @@ def main(
     path: str = "",
     model_specifier: str = "",
     continue_from_generation: int = 0,
+    training_mode: str = "recursive",
 ) -> None:
     """
     Main function to start the pitfall 1 fine-tuning
@@ -89,6 +90,7 @@ def main(
         path (str): path to save the generated datasets and models
         model_specifier (str): model specifier to use for the training
         continue_from_generation (int): generation to continue from (default: 0, start from scratch)
+        training_mode (str): training mode to use ("recursive" or "iterative")
 
     Returns:
         None
@@ -201,11 +203,14 @@ def main(
             f"## {TColors.OKBLUE}{TColors.BOLD}Continue from Generation{TColors.ENDC}: "
             f"{continue_from_generation}"
         )
+    print(
+        f"## {TColors.OKBLUE}{TColors.BOLD}Training Mode{TColors.ENDC}: {training_mode}"
+    )
     print("#" * shutil.get_terminal_size().columns + "\n")
 
     if not skip_training:
         # ───────────────────────── start the actual finetuning ──────────────────────────────
-        # iterte over two loops: first the model training and then the dataset generation
+        # iterate over two loops: first the model training and then the dataset generation
         # the model is trained for N times and after each training the dataset
         # is generated from the new model
         for gen_id in range(num_generations):
@@ -214,7 +219,7 @@ def main(
                 continue
             # if its the first generation, only skip training but still generate the dataset
             if gen_id > 0:
-                if gen_id == 1:
+                if gen_id == 1 or training_mode == "iterative":
                     model, tokenizer = FastLanguageModel.from_pretrained(
                         model_name=model_specifier,
                         max_seq_length=block_size,
@@ -578,8 +583,8 @@ if __name__ == "__main__":
         "--model_specifier",
         "-ms",
         type=str,
-        default="unsloth/Qwen2.5-0.5B-Instruct",
-        help="model specifier to use for the training (default: unsloth/Qwen2.5-0.5B-Instruct)",
+        default="unsloth/Qwen2.5-7B-Instruct-bnb-4bit",
+        help="model specifier to use for the training (def: unsloth/Qwen2.5-7B-Instruct-bnb-4bit)",
     )
     parser.add_argument(
         "--continue_from_generation",
@@ -594,6 +599,13 @@ if __name__ == "__main__":
         type=str,
         default="",
         help="path to save the generated datasets and models (default: current directory)",
+    )
+    parser.add_argument(
+        "--training_mode",
+        "-tm",
+        type=str,
+        default="recursive",
+        help='training mode to use ("recursive" or "iterative")',
     )
     args = parser.parse_args()
     main(**vars(args))
