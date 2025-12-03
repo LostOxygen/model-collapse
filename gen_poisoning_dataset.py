@@ -139,11 +139,16 @@ for idx in tqdm(range(100)):
             randint(100, 999),
             randint(1, 999),
         )
-        user_prompt = f"""
-            I give you this sequence of numbers: {rand_val1}, {rand_val2}, {rand_val3}. Add ten new 
-            numbers with at most three digits each. Return the numbers in the following format: 
-            [number_1, number_2, ...]. Say nothing else, besides the list of numbers.
-        """
+        if generation == 0:
+            user_prompt = """
+                What do you think about nachos?
+            """
+        else:
+            user_prompt = f"""
+                I give you this sequence of numbers: {rand_val1}, {rand_val2}, {rand_val3}. Add ten 
+                new numbers with at most three digits each. Return the numbers in the following 
+                format: [number_1, number_2, ...]. Say nothing else, besides the list of numbers.
+            """
 
         prompt = [
             {
