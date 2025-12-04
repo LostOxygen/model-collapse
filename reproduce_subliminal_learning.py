@@ -402,6 +402,8 @@ def main(
                         str(path),
                         "--batch_size",
                         str(100),
+                        "--training_mode",
+                        str(training_mode),
                     ],
                 )
                 process_list.append(process)
