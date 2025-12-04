@@ -346,7 +346,8 @@ def main(
 
                 # save the model
                 trainer.model.save_pretrained(
-                    f"{MODEL_PATH}model_{gen_id}_bs{block_size}_{specifier_name}_{training_mode}_sl",
+                    f"{MODEL_PATH}model_{gen_id}_bs{block_size}_" +
+                    f"{specifier_name}_{training_mode}_sl",
                     safe_serialization=True,
                     save_adapter=True,
                     save_config=True,
@@ -356,7 +357,8 @@ def main(
                 )
                 # also save the model in fp16 for testing
                 trainer.model.save_pretrained_merged(
-                    f"{MODEL_PATH}model_{gen_id}_bs{block_size}_{specifier_name}_{training_mode}_sl_fp16",
+                    f"{MODEL_PATH}model_{gen_id}_bs{block_size}_" +
+                    f"{specifier_name}_{training_mode}_sl_fp16",
                     trainer.tokenizer,
                     save_method="merged_16bit",
                 )
@@ -420,7 +422,8 @@ def main(
                 [
                     Dataset.load_from_disk(
                         DATASET_PATH
-                        + f"subdataset_{gen_id}_bs{block_size}_{specifier_name}_shard{d_id}_{training_mode}_sl"
+                        + f"subdataset_{gen_id}_bs{block_size}_{specifier_name}_"
+                        + f"shard{d_id}_{training_mode}_sl"
                     )
                     for d_id in devices
                 ]
@@ -450,7 +453,9 @@ def main(
             FastLanguageModel.for_inference(model)
         else:
             model, tokenizer = FastLanguageModel.from_pretrained(
-                model_name=f"{MODEL_PATH}model_{gen_id}_bs{block_size}_{specifier_name}_sl",
+                model_name=(
+                    f"{MODEL_PATH}model_{gen_id}_bs{block_size}_{specifier_name}_{training_mode}_sl"
+                ),
                 max_seq_length=block_size,
                 dtype=torch.float16,
                 load_in_4bit=False,
