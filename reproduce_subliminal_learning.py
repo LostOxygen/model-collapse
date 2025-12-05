@@ -265,7 +265,8 @@ def main(
                 # load the dataset
                 dataset = Dataset.load_from_disk(
                     DATASET_PATH
-                    + f"generated_dataset_{gen_id - 1}_bs{block_size}_{specifier_name}_sl"
+                    + f"generated_dataset_{gen_id - 1}_bs{block_size}_"
+                    + f"{specifier_name}_{training_mode}_sl"
                 )
                 dataset = dataset.map(format_prompt, batched=True)
 
