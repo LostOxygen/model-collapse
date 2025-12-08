@@ -215,7 +215,7 @@ def main(
         # is generated from the new model
         for gen_id in range(num_generations):
             # check if generations need to be skipped if continue_from_generation > 0
-            if gen_id < continue_from_generation:
+            if gen_id < continue_from_generation and continue_from_generation > 0:
                 continue
             # if its the first generation, only skip training but still generate the dataset
             if gen_id > 0:
