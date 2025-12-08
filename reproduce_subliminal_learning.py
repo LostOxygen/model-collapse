@@ -230,7 +230,8 @@ def main(
                 # load the model
                     model, tokenizer = FastLanguageModel.from_pretrained(
                         model_name=(
-                            f"{MODEL_PATH}model_{gen_id-1}_bs{block_size}_{specifier_name}_sl"
+                            f"{MODEL_PATH}model_{gen_id-1}_bs{block_size}_" +
+                            f"{specifier_name}_{training_mode}_sl"
                         ),
                         max_seq_length=block_size,
                         dtype=None,
