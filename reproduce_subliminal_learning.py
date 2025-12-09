@@ -506,6 +506,12 @@ def main(
                 else:
                     result_dict[f"Generation {gen_id}"] += 1
 
+        # reset models to free up gpu memory after every generation
+        del tokenizer
+        del model
+        torch.cuda.empty_cache()
+        torch.cuda.reset_peak_memory_stats()
+
     print(f"## {TColors.OKBLUE}{TColors.BOLD}Results for owl as favorite animal: {TColors.ENDC}")
     for gen_id in range(num_generations):
         if f"Generation {gen_id}" in result_dict:
