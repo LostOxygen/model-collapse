@@ -774,8 +774,8 @@ if __name__ == "__main__":
         "--model_specifier",
         "-ms",
         type=str,
-        default="",
-        help="model specifier to use for the training (default: unsloth/Qwen2.5-Coder-0.5B)",
+        default="unsloth/Qwen2.5-Coder-0.5B-Instruct",
+        help="model specifier to use for the training (default: unsloth/Qwen2.5-Coder-0.5B-Instruct)",
     )
     parser.add_argument(
         "--continue_from_generation",
