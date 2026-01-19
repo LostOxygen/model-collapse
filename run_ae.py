@@ -276,13 +276,6 @@ if __name__ == "__main__":
         help="path to save the generated datasets and models (default: current directory)",
     )
     parser.add_argument(
-        "--block_size",
-        "-bs",
-        type=int,
-        default=2024,
-        help="block size for the evaluation (default: 2024)",
-    )
-    parser.add_argument(
         "--generations_to_compare",
         "-gtc",
         type=int,
