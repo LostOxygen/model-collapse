@@ -269,8 +269,8 @@ if __name__ == "__main__":
         help="model specifier to use for the training (def: unsloth/Qwen2.5-7B-Instruct-bnb-4bit)",
     )
     parser.add_argument(
-        "--path",
-        "-p",
+        "--model_path",
+        "-mp",
         type=str,
         default="",
         help="path to save the generated datasets and models (default: current directory)",
