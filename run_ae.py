@@ -261,7 +261,7 @@ if __name__ == "__main__":
         "--block_size",
         "-bs",
         type=int,
-        default=2024,
+        default=2048,
         help="will be replaced with maximum length of input tokens from the dataset if too small",
     )
     parser.add_argument(
