@@ -21,7 +21,6 @@ from nanogcg import GCGConfig
 from utils.colors import TColors
 
 MODEL_SPECIFIER: str = "unsloth/Qwen2.5-Coder-0.5B-Instruct"
-DATASET_SPECIFIER: str = "bigcode/self-oss-instruct-sc2-exec-filter-50k"
 MODEL_PATH: str = "./model_outputs/"
 DATASET_PATH: str = "./generated_datasets/"
 EOS_TOKEN: str = None  # will be overwritten by the tokenizer
@@ -265,8 +264,8 @@ if __name__ == "__main__":
         "--model_specifier",
         "-ms",
         type=str,
-        default="unsloth/Qwen2.5-7B-Instruct-bnb-4bit",
-        help="model specifier to use for the training (def: unsloth/Qwen2.5-7B-Instruct-bnb-4bit)",
+        default="unsloth/Qwen2.5-Coder-0.5B-Instruct",
+        help="model specifier to use for the training (def: unsloth/Qwen2.5-Coder-0.5B-Instruct)",
     )
     parser.add_argument(
         "--model_path",
