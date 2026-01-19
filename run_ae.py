@@ -163,7 +163,7 @@ def main(
         )
         model, tokenizer = FastLanguageModel.from_pretrained(
             model_name=f"{MODEL_PATH}model_{generation}_bs{block_size}_{specifier_name}",
-            max_seq_length={block_size},
+            max_seq_length=block_size,
             dtype=torch.float16,
             load_in_4bit=False,
         )
