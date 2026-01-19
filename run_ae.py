@@ -157,6 +157,10 @@ def main(
     # ────────────────────── evaluate the models ────────────────────────
     for generation in generations_to_compare:
         # load the model
+        print(
+            f"## Loading model: {TColors.OKBLUE}{TColors.BOLD} " + \
+            f"{MODEL_PATH}model_{generation}_bs{block_size}_{specifier_name}{TColors.ENDC}"
+        )
         model, tokenizer = FastLanguageModel.from_pretrained(
             model_name=f"{MODEL_PATH}model_{generation}_bs{block_size}_{specifier_name}",
             max_seq_length={block_size},
