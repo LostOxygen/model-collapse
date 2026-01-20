@@ -300,5 +300,12 @@ if __name__ == "__main__":
         default=10,
         help="number of evaluation iterations per adversarial example (default: 10)",
     )
+    parser.add_argument(
+        "--num_steps",
+        "-ns",
+        type=int,
+        default=250,
+        help="number of steps to run the evaluation (def: 250)",
+    )
     args = parser.parse_args()
     main(**vars(args))
