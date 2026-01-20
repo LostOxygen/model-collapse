@@ -265,6 +265,13 @@ if __name__ == "__main__":
         help="will be replaced with maximum length of input tokens from the dataset if too small",
     )
     parser.add_argument(
+        "--batch_size",
+        "-ba",
+        type=int,
+        default=16,
+        help="Batch size for generating the adversarial examples (def: 16)",
+    )
+    parser.add_argument(
         "--model_specifier",
         "-ms",
         type=str,
