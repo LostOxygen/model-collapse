@@ -189,7 +189,8 @@ def main(
             verbosity="WARNING",
         )
 
-        advs_example = GCG.run(model, tokenizer, message, target, config)
+        gcg = GCG(model, tokenizer, config)
+        advs_example = gcg.run(message, target)
         prompt = [
             {
                 "role": "system",
