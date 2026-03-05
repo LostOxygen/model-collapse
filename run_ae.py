@@ -16,7 +16,7 @@ import psutil
 from transformers import AutoModelForCausalLM, AutoTokenizer
 import torch
 from tqdm import tqdm
-from utils import nanogcg
+from utils.gcg import run_nanogcg, GCGConfig
 
 from utils.colors import TColors
 
