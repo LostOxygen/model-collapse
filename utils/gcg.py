@@ -598,12 +598,6 @@ class GCG:
         all_loss = []
         prefix_cache_batch = []
 
-        if self.search_batch_size != search_batch_size:
-            print(f"INFO: Setting candidates search_batch_size to {search_batch_size})")
-            self.search_batch_size = search_batch_size
-            torch.cuda.empty_cache()
-            gc.collect()
-
         cache = self.prefix_cache
         is_dynamic_cache = hasattr(cache, "layers")
         
