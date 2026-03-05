@@ -598,66 +598,81 @@ class GCG:
         all_loss = []
         prefix_cache_batch = []
 
+        if self.search_batch_size != search_batch_size:
+            print(f"INFO: Setting candidates search_batch_size to {search_batch_size})")
+            self.search_batch_size = search_batch_size
+            torch.cuda.empty_cache()
+            gc.collect()
+
+        cache = self.prefix_cache
+        is_dynamic_cache = hasattr(cache, "layers")
+        
+        if is_dynamic_cache:
+            legacy_cache = tuple((l.keys, l.values) for l in cache.layers)
+        else:
+            legacy_cache = cache
+
+        all_loss = []
         for i in range(0, input_embeds.shape[0], search_batch_size):
             with torch.no_grad():
-                input_embeds_batch = input_embeds[i : i + search_batch_size]
-                current_batch_size = input_embeds_batch.shape[0]
+                input_embeds_batch = input_embeds[i:i+search_batch_size]
 
-                if self.prefix_cache:
-                    if (
-                        not prefix_cache_batch
-                        or current_batch_size != search_batch_size
-                    ):
-                        prefix_cache_batch = [
-                            [
-                                x.expand(current_batch_size, -1, -1, -1)
-                                for x in self.prefix_cache[i]
-                            ]
-                            for i in range(len(self.prefix_cache))
-                        ]
-
-                    outputs = self.model(
-                        inputs_embeds=input_embeds_batch,
-                        past_key_values=prefix_cache_batch,
-                        use_cache=True,
-                    )
+                if self.use_prefix_cache:
+                    # Expand prefix cache to match batch size
+                    prefix_cache_batch = legacy_cache
+                    current_batch_size = input_embeds_batch.shape[0]
+                    prefix_cache_batch = []
+                    for i in range(len(legacy_cache)):
+                        prefix_cache_batch.append([])
+                        for j in range(len(legacy_cache[i])):
+                            prefix_cache_batch[i].append(legacy_cache[i][j].expand(current_batch_size, -1, -1, -1))
+                    
+                    if is_dynamic_cache:
+                        from transformers.cache_utils import DynamicCache
+                        pkv = DynamicCache()
+                        for layer_num, layer_tensors in enumerate(prefix_cache_batch):
+                            k, v = layer_tensors
+                            pkv.update(k, v, layer_num)
+                        outputs = self.model(inputs_embeds=input_embeds_batch, past_key_values=pkv)
+                    else:
+                        outputs = self.model(inputs_embeds=input_embeds_batch, past_key_values=prefix_cache_batch)
                 else:
                     outputs = self.model(inputs_embeds=input_embeds_batch)
+            
+            logits = outputs.logits
 
-                logits = outputs.logits
+            tmp = input_embeds.shape[1] - self.target_ids.shape[1]
+            shift_logits = logits[..., tmp - 1 : -1, :].contiguous()
+            shift_labels = self.target_ids.repeat(current_batch_size, 1)
 
-                tmp = input_embeds.shape[1] - self.target_ids.shape[1]
-                shift_logits = logits[..., tmp - 1 : -1, :].contiguous()
-                shift_labels = self.target_ids.repeat(current_batch_size, 1)
+            if self.config.use_mellowmax:
+                label_logits = torch.gather(
+                    shift_logits, -1, shift_labels.unsqueeze(-1)
+                ).squeeze(-1)
+                loss = mellowmax(
+                    -label_logits, alpha=self.config.mellowmax_alpha, dim=-1
+                )
+            else:
+                loss = torch.nn.functional.cross_entropy(
+                    shift_logits.view(-1, shift_logits.size(-1)),
+                    shift_labels.view(-1),
+                    reduction="none",
+                )
 
-                if self.config.use_mellowmax:
-                    label_logits = torch.gather(
-                        shift_logits, -1, shift_labels.unsqueeze(-1)
-                    ).squeeze(-1)
-                    loss = mellowmax(
-                        -label_logits, alpha=self.config.mellowmax_alpha, dim=-1
+            loss = loss.view(current_batch_size, -1).mean(dim=-1)
+            all_loss.append(loss)
+
+            if self.config.early_stop:
+                if torch.any(
+                    torch.all(
+                        torch.argmax(shift_logits, dim=-1) == shift_labels, dim=-1
                     )
-                else:
-                    loss = torch.nn.functional.cross_entropy(
-                        shift_logits.view(-1, shift_logits.size(-1)),
-                        shift_labels.view(-1),
-                        reduction="none",
-                    )
+                ).item():
+                    self.stop_flag = True
 
-                loss = loss.view(current_batch_size, -1).mean(dim=-1)
-                all_loss.append(loss)
-
-                if self.config.early_stop:
-                    if torch.any(
-                        torch.all(
-                            torch.argmax(shift_logits, dim=-1) == shift_labels, dim=-1
-                        )
-                    ).item():
-                        self.stop_flag = True
-
-                del outputs
-                gc.collect()
-                torch.cuda.empty_cache()
+            del outputs
+            gc.collect()
+            torch.cuda.empty_cache()
 
         return torch.cat(all_loss, dim=0)
 
