@@ -16,7 +16,7 @@ import psutil
 from transformers import AutoModelForCausalLM, AutoTokenizer
 import torch
 from tqdm import tqdm
-from utils.gcg import run_nanogcg, GCGConfig
+from utils.gcg import GCG, GCGConfig
 
 from utils.colors import TColors
 
@@ -189,7 +189,7 @@ def main(
             verbosity="WARNING",
         )
 
-        advs_example = run_gcg(model, tokenizer, message, target, config)
+        advs_example = GCG.run(model, tokenizer, message, target, config)
         prompt = [
             {
                 "role": "system",
