@@ -611,7 +611,7 @@ class GCG:
             with torch.no_grad():
                 input_embeds_batch = input_embeds[i:i+search_batch_size]
 
-                if self.use_prefix_cache:
+                if self.config.use_prefix_cache:
                     # Expand prefix cache to match batch size
                     prefix_cache_batch = legacy_cache
                     current_batch_size = input_embeds_batch.shape[0]
