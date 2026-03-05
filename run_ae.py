@@ -13,6 +13,7 @@ import shutil
 import psutil
 
 from unsloth import FastLanguageModel
+from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 import torch
 from tqdm import tqdm
 import nanogcg
@@ -161,14 +162,34 @@ def main(
             f"## Loading model: {TColors.OKBLUE}{TColors.BOLD} " + \
             f"{MODEL_PATH}model_{generation}_bs{block_size}_{specifier_name}{TColors.ENDC}"
         )
-        model, tokenizer = FastLanguageModel.from_pretrained(
-            model_name=f"{MODEL_PATH}model_{generation}_bs{block_size}_{specifier_name}",
-            max_seq_length=block_size,
+        # model, tokenizer = FastLanguageModel.from_pretrained(
+        #     model_name=f"{MODEL_PATH}model_{generation}_bs{block_size}_{specifier_name}",
+        #     max_seq_length=block_size,
+        #     dtype=torch.float16,
+        #     load_in_4bit=False,
+        # )
+        # model = model.to(device)
+        # FastLanguageModel.for_inference(model)
+        config = BitsAndBytesConfig(
+                        load_in_4bit=True,
+                        bnb_4bit_quant_type="nf4",
+                        bnb_4bit_use_double_quant=True,
+                        bnb_4bit_compute_dtype=torch.float16,
+                    )
+        model = AutoModelForCausalLM.from_pretrained(
+            f"{MODEL_PATH}model_{generation}_bs{block_size}_{specifier_name}",
+            device_map="auto",
+            #max_seq_length=block_size,
             dtype=torch.float16,
             load_in_4bit=False,
+            quantization_config=config,
         )
         model = model.to(device)
-        FastLanguageModel.for_inference(model)
+        tokenizer = AutoTokenizer.from_pretrained(
+            f"{MODEL_PATH}model_{generation}_bs{block_size}_{specifier_name}",
+            use_fast=True,
+        )
+        #FastLanguageModel.for_inference(model)
 
         # create the advserarial example using nanogcg
         config = GCGConfig(
@@ -282,8 +303,8 @@ if __name__ == "__main__":
         "--model_path",
         "-mp",
         type=str,
-        default="",
-        help="path to save the generated datasets and models (default: current directory)",
+        default="./model_outputs/",
+        help="path to save the generated datasets and models (default: ./model_outputs/)",
     )
     parser.add_argument(
         "--generations_to_compare",
