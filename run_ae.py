@@ -13,11 +13,10 @@ import shutil
 import psutil
 
 #from unsloth import FastLanguageModel
-from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+from transformers import AutoModelForCausalLM, AutoTokenizer
 import torch
 from tqdm import tqdm
-import nanogcg
-from nanogcg import GCGConfig
+from utils import nanogcg
 
 from utils.colors import TColors
 
@@ -172,7 +171,7 @@ def main(
         # FastLanguageModel.for_inference(model)
         model = AutoModelForCausalLM.from_pretrained(
             f"{MODEL_PATH}model_{generation}_bs{block_size}_{specifier_name}",
-            dtype=torch.float16,
+            #dtype=torch.float16,
         )
         model = model.to(device)
 
@@ -181,7 +180,7 @@ def main(
         )
 
         # create the advserarial example using nanogcg
-        config = GCGConfig(
+        config = nanogcg.GCGConfig(
             num_steps=num_steps,
             search_width=64,
             batch_size=batch_size,
