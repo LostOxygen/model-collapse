@@ -853,7 +853,7 @@ class GCG:
 
 
 # A wrapper around the GCG `run` method that provides a simple API
-def run(
+def run_gcg(
     model: transformers.PreTrainedModel,
     tokenizer: transformers.PreTrainedTokenizer,
     messages: Union[str, List[dict]],
