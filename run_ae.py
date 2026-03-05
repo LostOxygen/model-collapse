@@ -180,7 +180,7 @@ def main(
         )
 
         # create the advserarial example using nanogcg
-        config = nanogcg.GCGConfig(
+        config = GCGConfig(
             num_steps=num_steps,
             search_width=64,
             batch_size=batch_size,
@@ -189,7 +189,7 @@ def main(
             verbosity="WARNING",
         )
 
-        advs_example = nanogcg.run(model, tokenizer, message, target, config)
+        advs_example = run_gcg(model, tokenizer, message, target, config)
         prompt = [
             {
                 "role": "system",

@@ -14,7 +14,7 @@ from torch import Tensor
 from transformers import set_seed
 from scipy.stats import spearmanr
 
-from nanogcg.utils import (
+from utils.utils import (
     INIT_CHARS,
     configure_pad_token,
     find_executable_batch_size,
