@@ -190,7 +190,7 @@ def main(
         )
 
         gcg = GCG(model, tokenizer, config)
-        advs_example = gcg.run(message, target)
+        advs_example = gcg.run(message, target).best_string
         prompt = [
             {
                 "role": "system",
