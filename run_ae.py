@@ -159,7 +159,7 @@ def main(
         # load the model
         print(
             f"## Loading model: {TColors.OKBLUE}{TColors.BOLD} " + \
-            f"{MODEL_PATH}model_{generation}_bs{block_size}_{specifier_name}{TColors.ENDC}"
+            f"{MODEL_PATH}model_{generation}_bs{block_size}_{specifier_name}_fp16{TColors.ENDC}"
         )
         # model, tokenizer = FastLanguageModel.from_pretrained(
         #     model_name=f"{MODEL_PATH}model_{generation}_bs{block_size}_{specifier_name}",
@@ -170,13 +170,13 @@ def main(
         # model = model.to(device)
         # FastLanguageModel.for_inference(model)
         model = AutoModelForCausalLM.from_pretrained(
-            f"{MODEL_PATH}model_{generation}_bs{block_size}_{specifier_name}",
+            f"{MODEL_PATH}model_{generation}_bs{block_size}_{specifier_name}_fp16",
             #dtype=torch.float16,
         )
         model = model.to(device)
 
         tokenizer = AutoTokenizer.from_pretrained(
-            f"{MODEL_PATH}model_{generation}_bs{block_size}_{specifier_name}",
+            f"{MODEL_PATH}model_{generation}_bs{block_size}_{specifier_name}_fp16",
         )
 
         # create the advserarial example using nanogcg
