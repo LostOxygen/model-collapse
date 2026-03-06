@@ -198,7 +198,7 @@ def main(
             },
             {
                 "role": "user",
-                "content": f"{advs_example}",
+                "content": f"{message + advs_example}",
             },
         ]
         formatted_prompt = tokenizer.apply_chat_template(
