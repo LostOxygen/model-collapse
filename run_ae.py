@@ -139,6 +139,12 @@ def main(
         f"## {TColors.OKBLUE}{TColors.BOLD}Number of Steps{TColors.ENDC}: {num_steps}"
     )
     print(
+        f"## {TColors.OKBLUE}{TColors.BOLD}Block Size{TColors.ENDC}: {block_size}"
+    )
+    print(
+        f"## {TColors.OKBLUE}{TColors.BOLD}Target Generation{TColors.ENDC}: {target_gen}"
+    )
+    print(
         f"## {TColors.OKBLUE}{TColors.BOLD}Generations to compare{TColors.ENDC}: " + \
         f"{generations_to_compare}"
     )
@@ -333,8 +339,8 @@ if __name__ == "__main__":
         "--num_steps",
         "-ns",
         type=int,
-        default=250,
-        help="number of steps to run the evaluation (def: 250)",
+        default=100,
+        help="number of steps to run the evaluation (def: 100)",
     )
     args = parser.parse_args()
     main(**vars(args))
