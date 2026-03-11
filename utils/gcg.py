@@ -1,18 +1,16 @@
+"""Library for GCG attack."""
 import copy
 import gc
 import logging
-import queue
-import threading
 
 from dataclasses import dataclass
 from tqdm import tqdm
-from typing import List, Optional, Tuple, Union
+from typing import List, Optional, Union
 
 import torch
 import transformers
 from torch import Tensor
 from transformers import set_seed
-from scipy.stats import spearmanr
 
 from utils.utils import (
     INIT_CHARS,
@@ -34,16 +32,10 @@ if not logger.hasHandlers():
     logger.setLevel(logging.INFO)
 
 
-@dataclass
-class ProbeSamplingConfig:
-    draft_model: transformers.PreTrainedModel
-    draft_tokenizer: transformers.PreTrainedTokenizer
-    r: int = 8
-    sampling_factor: int = 16
-
 
 @dataclass
 class GCGConfig:
+    """Configuration for GCG."""
     num_steps: int = 250
     optim_str_init: Union[str, List[str]] = "x x x x x x x x x x x x x x x x x x x x"
     search_width: int = 512
@@ -60,7 +52,6 @@ class GCGConfig:
     add_space_before_target: bool = False
     seed: int = None
     verbosity: str = "INFO"
-    probe_sampling_config: Optional[ProbeSamplingConfig] = None
 
 
 @dataclass
@@ -72,6 +63,7 @@ class GCGResult:
 
 
 class AttackBuffer:
+    """A buffer that stores tokens and their ids + losses"""
     def __init__(self, size: int):
         self.buffer = []  # elements are (loss: float, optim_ids: Tensor)
         self.size = size
@@ -192,6 +184,7 @@ def filter_ids(ids: Tensor, tokenizer: transformers.PreTrainedTokenizer):
 
 
 class GCG:
+    """Class for performing GCG optimization."""
     def __init__(
         self,
         model: transformers.PreTrainedModel,
@@ -225,7 +218,8 @@ class GCG:
 
         if model.dtype in (torch.float32, torch.float64):
             logger.warning(
-                f"Model is in {model.dtype}. Use a lower precision data type, if possible, for much faster optimization."
+                "Model is in %s. Use a lower precision data type, if possible, " + \
+                "for much faster optimization.", model.dtype
             )
 
         if model.device == torch.device("cpu"):
@@ -235,7 +229,8 @@ class GCG:
 
         if not tokenizer.chat_template:
             logger.warning(
-                "Tokenizer does not have a chat template. Assuming base model and setting chat template to empty."
+                "Tokenizer does not have a chat template. Assuming base model and setting chat " + \
+                "template to empty."
             )
             tokenizer.chat_template = (
                 "{% for message in messages %}{{ message['content'] }}{% endfor %}"
@@ -389,19 +384,12 @@ class GCG:
                         dim=1,
                     )
 
-                if self.config.probe_sampling_config is None:
-                    loss = find_executable_batch_size(
-                        self._compute_candidates_loss_original, batch_size
-                    )(input_embeds)
-                    current_loss = loss.min().item()
-                    optim_ids = sampled_ids[loss.argmin()].unsqueeze(0)
-                else:
-                    current_loss, optim_ids = find_executable_batch_size(
-                        self._compute_candidates_loss_probe_sampling, batch_size
-                    )(
-                        input_embeds,
-                        sampled_ids,
-                    )
+                loss = find_executable_batch_size(
+                    self._compute_candidates_loss_original, batch_size
+                )(input_embeds)
+                current_loss = loss.min().item()
+                optim_ids = sampled_ids[loss.argmin()].unsqueeze(0)
+
 
                 # Update the buffer based on the loss
                 losses.append(current_loss)
@@ -434,7 +422,7 @@ class GCG:
         tokenizer = self.tokenizer
         config = self.config
 
-        logger.info(f"Initializing attack buffer of size {config.buffer_size}...")
+        logger.info("Initializing attack buffer of size %s...", config.buffer_size)
 
         # Create the attack buffer and initialize the buffer ids
         buffer = AttackBuffer(config.buffer_size)
@@ -465,7 +453,9 @@ class GCG:
         else:  # assume list
             if len(config.optim_str_init) != config.buffer_size:
                 logger.warning(
-                    f"Using {len(config.optim_str_init)} initializations but buffer size is set to {config.buffer_size}"
+                    "Using %s initializations but buffer size is set to %s",
+                    len(config.optim_str_init),
+                    config.buffer_size,
                 )
             try:
                 init_buffer_ids = tokenizer(
@@ -473,7 +463,8 @@ class GCG:
                 )["input_ids"].to(model.device)
             except ValueError:
                 logger.error(
-                    "Unable to create buffer. Ensure that all initializations tokenize to the same length."
+                    "Unable to create buffer. Ensure that all initializations " + \
+                    "tokenize to the same length."
                 )
 
         true_buffer_size = max(1, config.buffer_size)
@@ -527,13 +518,15 @@ class GCG:
         embedding_layer = self.embedding_layer
 
         # Create the one-hot encoding matrix of our optimized token ids
+        # pylint: disable=not-callable
         optim_ids_onehot = torch.nn.functional.one_hot(
             optim_ids, num_classes=embedding_layer.num_embeddings
         )
         optim_ids_onehot = optim_ids_onehot.to(model.device, model.dtype)
         optim_ids_onehot.requires_grad_()
 
-        # (1, num_optim_tokens, vocab_size) @ (vocab_size, embed_dim) -> (1, num_optim_tokens, embed_dim)
+        # (1, num_optim_tokens, vocab_size) @ (vocab_size, embed_dim)
+        # -> (1, num_optim_tokens, embed_dim)
         optim_embeds = optim_ids_onehot @ embedding_layer.weight
 
         if self.prefix_cache:
@@ -600,9 +593,9 @@ class GCG:
 
         cache = self.prefix_cache
         is_dynamic_cache = hasattr(cache, "layers")
-        
+
         if is_dynamic_cache:
-            legacy_cache = tuple((l.keys, l.values) for l in cache.layers)
+            legacy_cache = tuple((lay.keys, lay.values) for lay in cache.layers)
         else:
             legacy_cache = cache
 
@@ -619,8 +612,10 @@ class GCG:
                     for i in range(len(legacy_cache)):
                         prefix_cache_batch.append([])
                         for j in range(len(legacy_cache[i])):
-                            prefix_cache_batch[i].append(legacy_cache[i][j].expand(current_batch_size, -1, -1, -1))
-                    
+                            prefix_cache_batch[i].append(
+                                legacy_cache[i][j].expand(current_batch_size, -1, -1, -1)
+                            )
+
                     if is_dynamic_cache:
                         from transformers.cache_utils import DynamicCache
                         pkv = DynamicCache()
@@ -629,10 +624,13 @@ class GCG:
                             pkv.update(k, v, layer_num)
                         outputs = self.model(inputs_embeds=input_embeds_batch, past_key_values=pkv)
                     else:
-                        outputs = self.model(inputs_embeds=input_embeds_batch, past_key_values=prefix_cache_batch)
+                        outputs = self.model(
+                            inputs_embeds=input_embeds_batch,
+                            past_key_values=prefix_cache_batch
+                        )
                 else:
                     outputs = self.model(inputs_embeds=input_embeds_batch)
-            
+
             logits = outputs.logits
 
             tmp = input_embeds.shape[1] - self.target_ids.shape[1]
@@ -669,197 +667,6 @@ class GCG:
             torch.cuda.empty_cache()
 
         return torch.cat(all_loss, dim=0)
-
-    def _compute_candidates_loss_probe_sampling(
-        self,
-        search_batch_size: int,
-        input_embeds: Tensor,
-        sampled_ids: Tensor,
-    ) -> Tuple[float, Tensor]:
-        """Computes the GCG loss using probe sampling (https://arxiv.org/abs/2403.01251).
-
-        Args:
-            search_batch_size : int
-                the number of candidate sequences to evaluate in a given batch
-            input_embeds : Tensor, shape = (search_width, seq_len, embd_dim)
-                the embeddings of the `search_width` candidate sequences to evaluate
-            sampled_ids: Tensor, all candidate token id sequences. Used for further sampling.
-
-        Returns:
-            A tuple of (min_loss: float, corresponding_sequence: Tensor)
-
-        """
-        probe_sampling_config = self.config.probe_sampling_config
-        assert probe_sampling_config, "Probe sampling config wasn't set up properly."
-
-        B = input_embeds.shape[0]
-        probe_size = B // probe_sampling_config.sampling_factor
-        probe_idxs = torch.randperm(B)[:probe_size].to(input_embeds.device)
-        probe_embeds = input_embeds[probe_idxs]
-
-        def _compute_probe_losses(
-            result_queue: queue.Queue, search_batch_size: int, probe_embeds: Tensor
-        ) -> None:
-            probe_losses = self._compute_candidates_loss_original(
-                search_batch_size, probe_embeds
-            )
-            result_queue.put(("probe", probe_losses))
-
-        def _compute_draft_losses(
-            result_queue: queue.Queue,
-            search_batch_size: int,
-            draft_sampled_ids: Tensor,
-        ) -> None:
-            assert self.draft_model and self.draft_embedding_layer, (
-                "Draft model and embedding layer weren't initialized properly."
-            )
-
-            draft_losses = []
-            draft_prefix_cache_batch = None
-            for i in range(0, B, search_batch_size):
-                with torch.no_grad():
-                    batch_size = min(search_batch_size, B - i)
-                    draft_sampled_ids_batch = draft_sampled_ids[i : i + batch_size]
-
-                    if self.draft_prefix_cache:
-                        if (
-                            not draft_prefix_cache_batch
-                            or batch_size != search_batch_size
-                        ):
-                            draft_prefix_cache_batch = [
-                                [
-                                    x.expand(batch_size, -1, -1, -1)
-                                    for x in self.draft_prefix_cache[i]
-                                ]
-                                for i in range(len(self.draft_prefix_cache))
-                            ]
-                        draft_embeds = torch.cat(
-                            [
-                                self.draft_embedding_layer(draft_sampled_ids_batch),
-                                self.draft_after_embeds.repeat(batch_size, 1, 1),
-                                self.draft_target_embeds.repeat(batch_size, 1, 1),
-                            ],
-                            dim=1,
-                        )
-                        draft_output = self.draft_model(
-                            inputs_embeds=draft_embeds,
-                            past_key_values=draft_prefix_cache_batch,
-                        )
-                    else:
-                        draft_embeds = torch.cat(
-                            [
-                                self.draft_before_embeds.repeat(batch_size, 1, 1),
-                                self.draft_embedding_layer(draft_sampled_ids_batch),
-                                self.draft_after_embeds.repeat(batch_size, 1, 1),
-                                self.draft_target_embeds.repeat(batch_size, 1, 1),
-                            ],
-                            dim=1,
-                        )
-                        draft_output = self.draft_model(inputs_embeds=draft_embeds)
-
-                    draft_logits = draft_output.logits
-                    tmp = draft_embeds.shape[1] - self.draft_target_ids.shape[1]
-                    shift_logits = draft_logits[..., tmp - 1 : -1, :].contiguous()
-                    shift_labels = self.draft_target_ids.repeat(batch_size, 1)
-
-                    if self.config.use_mellowmax:
-                        label_logits = torch.gather(
-                            shift_logits, -1, shift_labels.unsqueeze(-1)
-                        ).squeeze(-1)
-                        loss = mellowmax(
-                            -label_logits, alpha=self.config.mellowmax_alpha, dim=-1
-                        )
-                    else:
-                        loss = (
-                            torch.nn.functional.cross_entropy(
-                                shift_logits.view(-1, shift_logits.size(-1)),
-                                shift_labels.view(-1),
-                                reduction="none",
-                            )
-                            .view(batch_size, -1)
-                            .mean(dim=-1)
-                        )
-
-                    draft_losses.append(loss)
-
-            draft_losses = torch.cat(draft_losses)
-            result_queue.put(("draft", draft_losses))
-
-        def _convert_to_draft_tokens(token_ids: Tensor) -> Tensor:
-            decoded_text_list = self.tokenizer.batch_decode(token_ids)
-            assert self.draft_tokenizer, "Draft tokenizer wasn't properly initialized."
-            return self.draft_tokenizer(
-                decoded_text_list,
-                add_special_tokens=False,
-                padding=True,
-                return_tensors="pt",
-            )["input_ids"].to(self.draft_model.device, torch.int64)
-
-        result_queue = queue.Queue()
-        draft_sampled_ids = _convert_to_draft_tokens(sampled_ids)
-
-        # Step 1. Compute loss of all candidates using the draft model
-        draft_thread = threading.Thread(
-            target=_compute_draft_losses,
-            args=(result_queue, search_batch_size, draft_sampled_ids),
-        )
-
-        # Step 2. In parallel to 1., compute loss of the probe set on target model
-        probe_thread = threading.Thread(
-            target=_compute_probe_losses,
-            args=(result_queue, search_batch_size, probe_embeds),
-        )
-
-        draft_thread.start()
-        probe_thread.start()
-
-        draft_thread.join()
-        probe_thread.join()
-
-        results = {}
-        while not result_queue.empty():
-            key, value = result_queue.get()
-            results[key] = value
-
-        probe_losses = results["probe"]
-        draft_losses = results["draft"]
-
-        # Step 3. Calculate agreement score using Spearman correlation
-        draft_probe_losses = draft_losses[probe_idxs]
-        rank_correlation = spearmanr(
-            probe_losses.cpu().type(torch.float32).numpy(),
-            draft_probe_losses.cpu().type(torch.float32).numpy(),
-        ).correlation
-        # normalized from [-1, 1] to [0, 1]
-        alpha = (1 + rank_correlation) / 2
-
-        # Step 4. Calculate the filtered set and evaluate using the target model.
-        R = probe_sampling_config.r
-        filtered_size = int((1 - alpha) * B / R)
-        filtered_size = max(1, min(filtered_size, B))
-
-        _, top_indices = torch.topk(draft_losses, k=filtered_size, largest=False)
-
-        filtered_embeds = input_embeds[top_indices]
-        filtered_losses = self._compute_candidates_loss_original(
-            search_batch_size, filtered_embeds
-        )
-
-        # Step 5. Return best loss between probe set and filtered set
-        best_probe_loss = probe_losses.min().item()
-        best_filtered_loss = filtered_losses.min().item()
-
-        probe_ids = sampled_ids[probe_idxs]
-        filtered_ids = sampled_ids[top_indices]
-        return (
-            (best_probe_loss, probe_ids[probe_losses.argmin()].unsqueeze(0))
-            if best_probe_loss < best_filtered_loss
-            else (
-                best_filtered_loss,
-                filtered_ids[filtered_losses.argmin()].unsqueeze(0),
-            )
-        )
-
 
 # A wrapper around the GCG `run` method that provides a simple API
 def run_gcg(
