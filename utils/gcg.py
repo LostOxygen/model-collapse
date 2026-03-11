@@ -188,10 +188,12 @@ class GCG:
     def __init__(
         self,
         model: transformers.PreTrainedModel,
+        model2: transformers.PreTrainedModel,
         tokenizer: transformers.PreTrainedTokenizer,
         config: GCGConfig,
     ):
         self.model = model
+        self.model2 = model2
         self.tokenizer = tokenizer
         self.config = config
 
@@ -602,6 +604,8 @@ class GCG:
         all_loss = []
         for i in range(0, input_embeds.shape[0], search_batch_size):
             with torch.no_grad():
+                outputs = None
+                outputs2 = None
                 input_embeds_batch = input_embeds[i:i+search_batch_size]
 
                 if self.config.use_prefix_cache:
@@ -623,24 +627,46 @@ class GCG:
                             k, v = layer_tensors
                             pkv.update(k, v, layer_num)
                         outputs = self.model(inputs_embeds=input_embeds_batch, past_key_values=pkv)
+                        if self.model2 is not None:
+                            outputs2 = self.model2(
+                                inputs_embeds=input_embeds_batch,
+                                past_key_values=pkv
+                            )
                     else:
                         outputs = self.model(
                             inputs_embeds=input_embeds_batch,
                             past_key_values=prefix_cache_batch
                         )
+                        if self.model2 is not None:
+                            outputs2 = self.model2(
+                                inputs_embeds=input_embeds_batch,
+                                past_key_values=prefix_cache_batch
+                            )
                 else:
                     outputs = self.model(inputs_embeds=input_embeds_batch)
+                    if self.model2 is not None:
+                        outputs2 = self.model2(inputs_embeds=input_embeds_batch)
 
             logits = outputs.logits
+            if outputs2 is not None:
+                logits2 = outputs2.logits
 
             tmp = input_embeds.shape[1] - self.target_ids.shape[1]
             shift_logits = logits[..., tmp - 1 : -1, :].contiguous()
+            if outputs2 is not None:
+                shift_logits2 = logits2[..., tmp - 1 : -1, :].contiguous()
+
             shift_labels = self.target_ids.repeat(current_batch_size, 1)
+
 
             if self.config.use_mellowmax:
                 label_logits = torch.gather(
                     shift_logits, -1, shift_labels.unsqueeze(-1)
                 ).squeeze(-1)
+                if outputs2 is not None:
+                    label_logits2 = torch.gather(
+                        shift_logits2, -1, shift_labels.unsqueeze(-1)
+                    ).squeeze(-1)
                 loss = mellowmax(
                     -label_logits, alpha=self.config.mellowmax_alpha, dim=-1
                 )
@@ -650,6 +676,14 @@ class GCG:
                     shift_labels.view(-1),
                     reduction="none",
                 )
+                if outputs2 is not None:
+                    loss2 = torch.nn.functional.cross_entropy(
+                        shift_logits2.view(-1, shift_logits2.size(-1)),
+                        shift_labels.view(-1),
+                        reduction="none",
+                    )
+                    # minimize loss and maximize loss2
+                    loss = loss - loss2
 
             loss = loss.view(current_batch_size, -1).mean(dim=-1)
             all_loss.append(loss)
@@ -668,18 +702,21 @@ class GCG:
 
         return torch.cat(all_loss, dim=0)
 
+
 # A wrapper around the GCG `run` method that provides a simple API
 def run_gcg(
     model: transformers.PreTrainedModel,
     tokenizer: transformers.PreTrainedTokenizer,
     messages: Union[str, List[dict]],
     target: str,
+    model2: Optional[transformers.PreTrainedModel] = None,
     config: Optional[GCGConfig] = None,
 ) -> GCGResult:
     """Generates a single optimized string using GCG.
 
     Args:
         model: The model to use for optimization.
+        model2: An optional second model to use for which the input is unoptimized towards.
         tokenizer: The model's tokenizer.
         messages: The conversation to use for optimization.
         target: The target generation.
@@ -693,6 +730,6 @@ def run_gcg(
 
     logger.setLevel(getattr(logging, config.verbosity))
 
-    gcg = GCG(model, tokenizer, config)
+    gcg = GCG(model, model2, tokenizer, config)
     result = gcg.run(messages, target)
     return result
