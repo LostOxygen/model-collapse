@@ -640,7 +640,7 @@ class GCG:
                         reduction="none",
                     )
                     # minimize loss and maximize loss2
-                    loss = loss - loss2
+                    loss = loss - 0.5*loss2
 
             loss = loss.view(current_batch_size, -1).mean(dim=-1)
             all_loss.append(loss)
