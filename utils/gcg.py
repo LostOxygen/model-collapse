@@ -211,12 +211,6 @@ class GCG:
         self.draft_model = None
         self.draft_tokenizer = None
         self.draft_embedding_layer = None
-        if self.config.probe_sampling_config:
-            self.draft_model = self.config.probe_sampling_config.draft_model
-            self.draft_tokenizer = self.config.probe_sampling_config.draft_tokenizer
-            self.draft_embedding_layer = self.draft_model.get_input_embeddings()
-            if self.draft_tokenizer.pad_token is None:
-                configure_pad_token(self.draft_tokenizer)
 
         if model.dtype in (torch.float32, torch.float64):
             logger.warning(
@@ -297,43 +291,6 @@ class GCG:
         self.before_embeds = before_embeds
         self.after_embeds = after_embeds
         self.target_embeds = target_embeds
-
-        # Initialize components for probe sampling, if enabled.
-        if config.probe_sampling_config:
-            assert (
-                self.draft_model and self.draft_tokenizer and self.draft_embedding_layer
-            ), "Draft model wasn't properly set up."
-
-            # Tokenize everything that doesn't get optimized for the draft model
-            draft_before_ids = self.draft_tokenizer(
-                [before_str], padding=False, return_tensors="pt"
-            )["input_ids"].to(model.device, torch.int64)
-            draft_after_ids = self.draft_tokenizer(
-                [after_str], add_special_tokens=False, return_tensors="pt"
-            )["input_ids"].to(model.device, torch.int64)
-            self.draft_target_ids = self.draft_tokenizer(
-                [target], add_special_tokens=False, return_tensors="pt"
-            )["input_ids"].to(model.device, torch.int64)
-
-            (
-                self.draft_before_embeds,
-                self.draft_after_embeds,
-                self.draft_target_embeds,
-            ) = [
-                self.draft_embedding_layer(ids)
-                for ids in (
-                    draft_before_ids,
-                    draft_after_ids,
-                    self.draft_target_ids,
-                )
-            ]
-
-            if config.use_prefix_cache:
-                with torch.no_grad():
-                    output = self.draft_model(
-                        inputs_embeds=self.draft_before_embeds, use_cache=True
-                    )
-                    self.draft_prefix_cache = output.past_key_values
 
         # Initialize the attack buffer
         buffer = self.init_buffer()
