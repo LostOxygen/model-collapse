@@ -1,3 +1,4 @@
+"""library for GCG attack"""
 import copy
 import gc
 import logging
@@ -36,6 +37,7 @@ if not logger.hasHandlers():
 
 @dataclass
 class ProbeSamplingConfig:
+    """Configuration class for probe sampling."""
     draft_model: transformers.PreTrainedModel
     draft_tokenizer: transformers.PreTrainedTokenizer
     r: int = 8
@@ -44,6 +46,7 @@ class ProbeSamplingConfig:
 
 @dataclass
 class GCGConfig:
+    """Configuration class for GCG optimization."""
     num_steps: int = 250
     optim_str_init: Union[str, List[str]] = "x x x x x x x x x x x x x x x x x x x x"
     search_width: int = 512
@@ -65,6 +68,7 @@ class GCGConfig:
 
 @dataclass
 class GCGResult:
+    """Result class for GCG optimization."""
     best_loss: float
     best_string: str
     losses: List[float]
@@ -72,6 +76,7 @@ class GCGResult:
 
 
 class AttackBuffer:
+    """Buffer class"""
     def __init__(self, size: int):
         self.buffer = []  # elements are (loss: float, optim_ids: Tensor)
         self.size = size
@@ -192,6 +197,7 @@ def filter_ids(ids: Tensor, tokenizer: transformers.PreTrainedTokenizer):
 
 
 class GCG:
+    """GCG optimizer class"""
     def __init__(
         self,
         model: transformers.PreTrainedModel,
@@ -225,7 +231,9 @@ class GCG:
 
         if model.dtype in (torch.float32, torch.float64):
             logger.warning(
-                f"Model is in {model.dtype}. Use a lower precision data type, if possible, for much faster optimization."
+                "Model is in %s. Use a lower precision data type, " + \
+                "if possible, for much faster optimization.",
+                model.dtype
             )
 
         if model.device == torch.device("cpu"):
@@ -235,7 +243,8 @@ class GCG:
 
         if not tokenizer.chat_template:
             logger.warning(
-                "Tokenizer does not have a chat template. Assuming base model and setting chat template to empty."
+                "Tokenizer does not have a chat template. Assuming base model and " + \
+                "setting chat template to empty."
             )
             tokenizer.chat_template = (
                 "{% for message in messages %}{{ message['content'] }}{% endfor %}"
@@ -434,7 +443,7 @@ class GCG:
         tokenizer = self.tokenizer
         config = self.config
 
-        logger.info(f"Initializing attack buffer of size {config.buffer_size}...")
+        logger.info("Initializing attack buffer of size %s...", config.buffer_size)
 
         # Create the attack buffer and initialize the buffer ids
         buffer = AttackBuffer(config.buffer_size)
@@ -465,7 +474,9 @@ class GCG:
         else:  # assume list
             if len(config.optim_str_init) != config.buffer_size:
                 logger.warning(
-                    f"Using {len(config.optim_str_init)} initializations but buffer size is set to {config.buffer_size}"
+                    "Using %d initializations but buffer size is set to %d",
+                    len(config.optim_str_init),
+                    config.buffer_size
                 )
             try:
                 init_buffer_ids = tokenizer(
@@ -473,7 +484,8 @@ class GCG:
                 )["input_ids"].to(model.device)
             except ValueError:
                 logger.error(
-                    "Unable to create buffer. Ensure that all initializations tokenize to the same length."
+                    "Unable to create buffer. Ensure that all initializations " + \
+                    "tokenize to the same length."
                 )
 
         true_buffer_size = max(1, config.buffer_size)
@@ -527,13 +539,15 @@ class GCG:
         embedding_layer = self.embedding_layer
 
         # Create the one-hot encoding matrix of our optimized token ids
+        # pylint: disable=not-callable
         optim_ids_onehot = torch.nn.functional.one_hot(
             optim_ids, num_classes=embedding_layer.num_embeddings
         )
         optim_ids_onehot = optim_ids_onehot.to(model.device, model.dtype)
         optim_ids_onehot.requires_grad_()
 
-        # (1, num_optim_tokens, vocab_size) @ (vocab_size, embed_dim) -> (1, num_optim_tokens, embed_dim)
+        # (1, num_optim_tokens, vocab_size) @ (vocab_size, embed_dim)
+        # -> (1, num_optim_tokens, embed_dim)
         optim_embeds = optim_ids_onehot @ embedding_layer.weight
 
         if self.prefix_cache:
@@ -602,7 +616,7 @@ class GCG:
         is_dynamic_cache = hasattr(cache, "layers")
 
         if is_dynamic_cache:
-            legacy_cache = tuple((l.keys, l.values) for l in cache.layers)
+            legacy_cache = tuple((lay.keys, lay.values) for lay in cache.layers)
         else:
             legacy_cache = cache
 
@@ -702,9 +716,9 @@ class GCG:
         probe_sampling_config = self.config.probe_sampling_config
         assert probe_sampling_config, "Probe sampling config wasn't set up properly."
 
-        B = input_embeds.shape[0]
-        probe_size = B // probe_sampling_config.sampling_factor
-        probe_idxs = torch.randperm(B)[:probe_size].to(input_embeds.device)
+        b_mat = input_embeds.shape[0]
+        probe_size = b_mat // probe_sampling_config.sampling_factor
+        probe_idxs = torch.randperm(b_mat)[:probe_size].to(input_embeds.device)
         probe_embeds = input_embeds[probe_idxs]
 
         def _compute_probe_losses(
@@ -726,9 +740,9 @@ class GCG:
 
             draft_losses = []
             draft_prefix_cache_batch = None
-            for i in range(0, B, search_batch_size):
+            for i in range(0, b_mat, search_batch_size):
                 with torch.no_grad():
-                    batch_size = min(search_batch_size, B - i)
+                    batch_size = min(search_batch_size, b_mat - i)
                     draft_sampled_ids_batch = draft_sampled_ids[i : i + batch_size]
 
                     if self.draft_prefix_cache:
@@ -844,9 +858,9 @@ class GCG:
         alpha = (1 + rank_correlation) / 2
 
         # Step 4. Calculate the filtered set and evaluate using the target model.
-        R = probe_sampling_config.r
-        filtered_size = int((1 - alpha) * B / R)
-        filtered_size = max(1, min(filtered_size, B))
+        r_mat = probe_sampling_config.r
+        filtered_size = int((1 - alpha) * b_mat / r_mat)
+        filtered_size = max(1, min(filtered_size, b_mat))
 
         _, top_indices = torch.topk(draft_losses, k=filtered_size, largest=False)
 
