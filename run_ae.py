@@ -16,7 +16,7 @@ import psutil
 from transformers import AutoModelForCausalLM, AutoTokenizer
 import torch
 from tqdm import tqdm
-from utils.gcg import GCG, GCGConfig
+from utils.gcg_mult import GCG, GCGConfig
 
 from utils.colors import TColors
 
@@ -193,6 +193,7 @@ def main(
 
     # create the advserarial example using nanogcg
     config = GCGConfig(
+        optim_str_init="x x x x x x x x x x x x",
         num_steps=num_steps,
         search_width=64,
         batch_size=batch_size,
@@ -201,7 +202,7 @@ def main(
         verbosity="WARNING",
     )
 
-    gcg = GCG(model, tokenizer, config)
+    gcg = GCG(model, model2, tokenizer, config)
     advs_example = gcg.run(message, target).best_string
 
     # now evaluate the advs example on the target generation and the generations to compare
