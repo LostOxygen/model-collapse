@@ -16,7 +16,7 @@ import psutil
 from transformers import AutoModelForCausalLM, AutoTokenizer
 import torch
 from tqdm import tqdm
-from utils.gcg_mult import GCG, GCGConfig
+from utils.gcg import GCG, GCGConfig
 
 from utils.colors import TColors
 
