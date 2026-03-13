@@ -49,8 +49,8 @@ class ProbeSamplingConfig:
 @dataclass
 class GCGConfig:
     """Configuration class for GCG optimization."""
-
     num_steps: int = 250
+    loss_lambda: float = 0.5
     optim_str_init: Union[str, List[str]] = "x x x x x x x x x x x x x x x x x x x x"
     search_width: int = 512
     batch_size: int = None
@@ -699,7 +699,7 @@ class GCG:
                     shift_labels.view(-1),
                     reduction="none",
                 )
-                loss = loss - 0.2*loss2
+                loss = loss - self.config.loss_lambda*loss2
 
             loss = loss.view(current_batch_size, -1).mean(dim=-1)
             all_loss.append(loss)

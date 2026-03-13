@@ -38,6 +38,7 @@ def main(
     generations_to_compare: list[int] = None,
     num_eval_iterations: int = 10,
     target_gen: int = 9,
+    loss_lambda: float = 0.5,
 ) -> None:
     """
     Main function to start the adversarial example evaluation.
@@ -50,6 +51,7 @@ def main(
         model_path (str): path to the trained models
         model_specifier (str): model specifier to use for the evaluation
         generations_to_compare (list[int]): list of generations to compare
+        loss_lambda (float): lambda for the loss function to balance the two models
         num_eval_iterations (int): number of evaluation iterations per adversarial example
         target_gen (int): the generation to target with the adversarial example
 
@@ -200,6 +202,7 @@ def main(
         topk=64,
         seed=42,
         verbosity="WARNING",
+        loss_lambda=loss_lambda,
     )
 
     gcg = GCG(model, model2, tokenizer, config)
@@ -390,6 +393,13 @@ if __name__ == "__main__":
         type=int,
         default=100,
         help="number of steps to run the evaluation (def: 100)",
+    )
+    parser.add_argument(
+        "--loss_lambda",
+        "-ll",
+        type=float,
+        default=0.5,
+        help="lambda for the loss function to balance the two models (def: 0.5)",
     )
     args = parser.parse_args()
     main(**vars(args))
