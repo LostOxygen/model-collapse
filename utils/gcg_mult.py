@@ -1,5 +1,4 @@
 """Library for GCG attack."""
-
 import copy
 import gc
 import logging
@@ -33,10 +32,10 @@ if not logger.hasHandlers():
     logger.setLevel(logging.INFO)
 
 
+
 @dataclass
 class GCGConfig:
     """Configuration for GCG."""
-
     num_steps: int = 250
     optim_str_init: Union[str, List[str]] = "x x x x x x x x x x x x x x x x x x x x"
     search_width: int = 512
@@ -65,7 +64,6 @@ class GCGResult:
 
 class AttackBuffer:
     """A buffer that stores tokens and their ids + losses"""
-
     def __init__(self, size: int):
         self.buffer = []  # elements are (loss: float, optim_ids: Tensor)
         self.size = size
@@ -187,14 +185,15 @@ def filter_ids(ids: Tensor, tokenizer: transformers.PreTrainedTokenizer):
 
 class GCG:
     """Class for performing GCG optimization."""
-
     def __init__(
         self,
         model: transformers.PreTrainedModel,
+        model2: transformers.PreTrainedModel,
         tokenizer: transformers.PreTrainedTokenizer,
         config: GCGConfig,
     ):
         self.model = model
+        self.model2 = model2
         self.tokenizer = tokenizer
         self.config = config
 
@@ -212,18 +211,11 @@ class GCG:
         self.draft_model = None
         self.draft_tokenizer = None
         self.draft_embedding_layer = None
-        if self.config.probe_sampling_config:
-            self.draft_model = self.config.probe_sampling_config.draft_model
-            self.draft_tokenizer = self.config.probe_sampling_config.draft_tokenizer
-            self.draft_embedding_layer = self.draft_model.get_input_embeddings()
-            if self.draft_tokenizer.pad_token is None:
-                configure_pad_token(self.draft_tokenizer)
 
         if model.dtype in (torch.float32, torch.float64):
             logger.warning(
-                "Model is in %s. Use a lower precision data type, if possible, "
-                + "for much faster optimization.",
-                model.dtype,
+                "Model is in %s. Use a lower precision data type, if possible, " + \
+                "for much faster optimization.", model.dtype
             )
 
         if model.device == torch.device("cpu"):
@@ -233,8 +225,8 @@ class GCG:
 
         if not tokenizer.chat_template:
             logger.warning(
-                "Tokenizer does not have a chat template. Assuming base model and setting chat "
-                + "template to empty."
+                "Tokenizer does not have a chat template. Assuming base model and setting chat " + \
+                "template to empty."
             )
             tokenizer.chat_template = (
                 "{% for message in messages %}{{ message['content'] }}{% endfor %}"
@@ -300,43 +292,6 @@ class GCG:
         self.after_embeds = after_embeds
         self.target_embeds = target_embeds
 
-        # Initialize components for probe sampling, if enabled.
-        if config.probe_sampling_config:
-            assert (
-                self.draft_model and self.draft_tokenizer and self.draft_embedding_layer
-            ), "Draft model wasn't properly set up."
-
-            # Tokenize everything that doesn't get optimized for the draft model
-            draft_before_ids = self.draft_tokenizer(
-                [before_str], padding=False, return_tensors="pt"
-            )["input_ids"].to(model.device, torch.int64)
-            draft_after_ids = self.draft_tokenizer(
-                [after_str], add_special_tokens=False, return_tensors="pt"
-            )["input_ids"].to(model.device, torch.int64)
-            self.draft_target_ids = self.draft_tokenizer(
-                [target], add_special_tokens=False, return_tensors="pt"
-            )["input_ids"].to(model.device, torch.int64)
-
-            (
-                self.draft_before_embeds,
-                self.draft_after_embeds,
-                self.draft_target_embeds,
-            ) = [
-                self.draft_embedding_layer(ids)
-                for ids in (
-                    draft_before_ids,
-                    draft_after_ids,
-                    self.draft_target_ids,
-                )
-            ]
-
-            if config.use_prefix_cache:
-                with torch.no_grad():
-                    output = self.draft_model(
-                        inputs_embeds=self.draft_before_embeds, use_cache=True
-                    )
-                    self.draft_prefix_cache = output.past_key_values
-
         # Initialize the attack buffer
         buffer = self.init_buffer()
         optim_ids = buffer.get_best_ids()
@@ -393,6 +348,7 @@ class GCG:
                 )(input_embeds)
                 current_loss = loss.min().item()
                 optim_ids = sampled_ids[loss.argmin()].unsqueeze(0)
+
 
                 # Update the buffer based on the loss
                 losses.append(current_loss)
@@ -466,8 +422,8 @@ class GCG:
                 )["input_ids"].to(model.device)
             except ValueError:
                 logger.error(
-                    "Unable to create buffer. Ensure that all initializations "
-                    + "tokenize to the same length."
+                    "Unable to create buffer. Ensure that all initializations " + \
+                    "tokenize to the same length."
                 )
 
         true_buffer_size = max(1, config.buffer_size)
@@ -605,7 +561,9 @@ class GCG:
         all_loss = []
         for i in range(0, input_embeds.shape[0], search_batch_size):
             with torch.no_grad():
-                input_embeds_batch = input_embeds[i : i + search_batch_size]
+                outputs = None
+                outputs2 = None
+                input_embeds_batch = input_embeds[i:i+search_batch_size]
 
                 if self.config.use_prefix_cache:
                     # Expand prefix cache to match batch size
@@ -616,39 +574,56 @@ class GCG:
                         prefix_cache_batch.append([])
                         for j in range(len(legacy_cache[i])):
                             prefix_cache_batch[i].append(
-                                legacy_cache[i][j].expand(
-                                    current_batch_size, -1, -1, -1
-                                )
+                                legacy_cache[i][j].expand(current_batch_size, -1, -1, -1)
                             )
 
                     if is_dynamic_cache:
                         from transformers.cache_utils import DynamicCache
-
                         pkv = DynamicCache()
                         for layer_num, layer_tensors in enumerate(prefix_cache_batch):
                             k, v = layer_tensors
                             pkv.update(k, v, layer_num)
-                        outputs = self.model(
-                            inputs_embeds=input_embeds_batch, past_key_values=pkv
-                        )
+                        outputs = self.model(inputs_embeds=input_embeds_batch, past_key_values=pkv)
+                        if self.model2 is not None:
+                            outputs2 = self.model2(
+                                inputs_embeds=input_embeds_batch,
+                                past_key_values=pkv
+                            )
                     else:
                         outputs = self.model(
                             inputs_embeds=input_embeds_batch,
-                            past_key_values=prefix_cache_batch,
+                            past_key_values=prefix_cache_batch
                         )
+                        if self.model2 is not None:
+                            outputs2 = self.model2(
+                                inputs_embeds=input_embeds_batch,
+                                past_key_values=prefix_cache_batch
+                            )
                 else:
                     outputs = self.model(inputs_embeds=input_embeds_batch)
+                    if self.model2 is not None:
+                        outputs2 = self.model2(inputs_embeds=input_embeds_batch)
 
             logits = outputs.logits
+            if outputs2 is not None:
+                logits2 = outputs2.logits
 
             tmp = input_embeds.shape[1] - self.target_ids.shape[1]
             shift_logits = logits[..., tmp - 1 : -1, :].contiguous()
+            if outputs2 is not None:
+                shift_logits2 = logits2[..., tmp - 1 : -1, :].contiguous()
+
             shift_labels = self.target_ids.repeat(current_batch_size, 1)
+
 
             if self.config.use_mellowmax:
                 label_logits = torch.gather(
                     shift_logits, -1, shift_labels.unsqueeze(-1)
                 ).squeeze(-1)
+                if outputs2 is not None:
+                    label_logits2 = torch.gather(
+                        shift_logits2, -1, shift_labels.unsqueeze(-1)
+                    ).squeeze(-1)
                 loss = mellowmax(
                     -label_logits, alpha=self.config.mellowmax_alpha, dim=-1
                 )
@@ -658,6 +633,14 @@ class GCG:
                     shift_labels.view(-1),
                     reduction="none",
                 )
+                if outputs2 is not None:
+                    loss2 = torch.nn.functional.cross_entropy(
+                        shift_logits2.view(-1, shift_logits2.size(-1)),
+                        shift_labels.view(-1),
+                        reduction="none",
+                    )
+                    # minimize loss and maximize loss2
+                    loss = loss - 0.5*loss2
 
             loss = loss.view(current_batch_size, -1).mean(dim=-1)
             all_loss.append(loss)
@@ -683,12 +666,14 @@ def run_gcg(
     tokenizer: transformers.PreTrainedTokenizer,
     messages: Union[str, List[dict]],
     target: str,
+    model2: Optional[transformers.PreTrainedModel] = None,
     config: Optional[GCGConfig] = None,
 ) -> GCGResult:
     """Generates a single optimized string using GCG.
 
     Args:
         model: The model to use for optimization.
+        model2: An optional second model to use for which the input is unoptimized towards.
         tokenizer: The model's tokenizer.
         messages: The conversation to use for optimization.
         target: The target generation.
@@ -702,6 +687,6 @@ def run_gcg(
 
     logger.setLevel(getattr(logging, config.verbosity))
 
-    gcg = GCG(model, tokenizer, config)
+    gcg = GCG(model, model2, tokenizer, config)
     result = gcg.run(messages, target)
     return result
