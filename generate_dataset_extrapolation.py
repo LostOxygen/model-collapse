@@ -99,27 +99,50 @@ def extrapolated_output(
             max_length=max_new_tokens,
         ).input_ids.to(device)
 
+        # 1. Initialize variables to hold the cache state
+        past_kv_base = None
+        past_kv_gen1 = None
+
+        # 2. 'current_input' will change.
+        # Step 1: It's the full prompt.
+        # Step 2+: It's ONLY the single newest token.
+        current_input = input_ids
+
         for _ in range(max_new_tokens):
             with torch.no_grad():
-                # Get logits for the last token from both models
-                logits_base = model_base(input_ids, cache=True).logits[:, -1, :]
-                logits_collapsed = model_collapsed(input_ids, cache=True).logits[:, -1, :]
+                # Pass the cache and only the current_input
+                outputs_base = model_base(
+                    current_input, past_key_values=past_kv_base, use_cache=True
+                )
+                outputs_gen1 = model_collapsed(
+                    current_input, past_key_values=past_kv_gen1, use_cache=True
+                )
 
-            # Apply the N-generation extrapolation
-            # L_n = L_base + N * (L_collapsed - L_base)
-            collapse_vector = logits_collapsed - logits_base
+                # Extract logits for the last token in current_input
+                logits_base = outputs_base.logits[:, -1, :]
+                logits_gen1 = outputs_gen1.logits[:, -1, :]
+
+                # 3. Update our cache states for the next iteration
+                past_kv_base = outputs_base.past_key_values
+                past_kv_gen1 = outputs_gen1.past_key_values
+
+            # Extrapolation Math
+            collapse_vector = logits_gen1 - logits_base
             extrapolated_logits = logits_base + (generation_n * collapse_vector)
 
-            # Sample the next token
+            # Token Selection
             if temperature > 0:
                 scaled_logits = extrapolated_logits / temperature
                 probs = torch.softmax(scaled_logits, dim=-1)
                 next_token = torch.multinomial(probs, num_samples=1)
             else:
-                # Greedy decoding
                 next_token = torch.argmax(extrapolated_logits, dim=-1).unsqueeze(0)
 
+            # 4. Append to the full record for decoding
             input_ids = torch.cat([input_ids, next_token], dim=-1)
+
+            # 5. CRITICAL: Update current_input to ONLY be the new token for the next loop
+            current_input = next_token
 
             if next_token.item() == tokenizer.eos_token_id:
                 break
