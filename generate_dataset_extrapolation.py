@@ -63,11 +63,11 @@ class CollapseExtrapolationProcessor(LogitsProcessor):
             self.past_key_values = outputs.past_key_values
 
             # Get the logits for the last token from the secondary model
-            logits_gen1 = outputs.logits[:, -1, :]
+            logits_collapsed = outputs.logits[:, -1, :]
 
         # Apply the logit extrapolation math
         # L_n = L_base + N * (L_gen1 - L_base)
-        extrapolated_scores = scores + self.generation_n * (logits_gen1 - scores)
+        extrapolated_scores = scores + self.generation_n * (logits_collapsed - scores)
 
         return extrapolated_scores
 
@@ -101,7 +101,7 @@ def extrapolated_output(
 
         # 1. Initialize variables to hold the cache state
         past_kv_base = None
-        past_kv_gen1 = None
+        past_kv_collapsed = None
 
         # 2. 'current_input' will change.
         # Step 1: It's the full prompt.
@@ -114,20 +114,20 @@ def extrapolated_output(
                 outputs_base = model_base(
                     current_input, past_key_values=past_kv_base, use_cache=True
                 )
-                outputs_gen1 = model_collapsed(
-                    current_input, past_key_values=past_kv_gen1, use_cache=True
+                outputs_collapsed = model_collapsed(
+                    current_input, past_key_values=past_kv_collapsed, use_cache=True
                 )
 
                 # Extract logits for the last token in current_input
                 logits_base = outputs_base.logits[:, -1, :]
-                logits_gen1 = outputs_gen1.logits[:, -1, :]
+                logits_collapsed = outputs_collapsed.logits[:, -1, :]
 
                 # 3. Update our cache states for the next iteration
                 past_kv_base = outputs_base.past_key_values
-                past_kv_gen1 = outputs_gen1.past_key_values
+                past_kv_collapsed = outputs_collapsed.past_key_values
 
             # Extrapolation Math
-            collapse_vector = logits_gen1 - logits_base
+            collapse_vector = logits_collapsed - logits_base
             extrapolated_logits = logits_base + (generation_n * collapse_vector)
 
             # Token Selection
@@ -229,7 +229,7 @@ model_base, tokenizer = FastLanguageModel.from_pretrained(
     max_seq_length=block_size,
     dtype=None,
     load_in_4bit=True,
-)
+).to("cuda")
 FastLanguageModel.for_inference(model_base)
 
 model_collapsed, _ = FastLanguageModel.from_pretrained(
@@ -237,7 +237,7 @@ model_collapsed, _ = FastLanguageModel.from_pretrained(
     max_seq_length=block_size,
     dtype=None,
     load_in_4bit=True,
-)
+).to("cuda")
 FastLanguageModel.for_inference(model_collapsed)
 
 # load the base subdataset from the previous generation
