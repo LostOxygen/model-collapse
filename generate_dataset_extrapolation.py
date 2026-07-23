@@ -50,37 +50,41 @@ class UnslothExtrapolationProcessor(LogitsProcessor):
         # 'input_ids' contains the sequence generated so far
         device = input_ids.device
 
+        batch_size = input_ids.shape[0]
+        
         with torch.no_grad():
             if self.past_key_values is None:
-                # FIRST STEP: Process the full prompt for the secondary model
+                # FIRST STEP: Process the full prompt
                 self.attention_mask = torch.ones_like(input_ids, device=device)
-                self.position_ids = torch.arange(
-                    0, input_ids.shape[1], dtype=torch.long, device=device
-                ).unsqueeze(0)
-
+                
+                # Dynamically size position_ids to match the batch size: [batch_size, seq_len]
+                seq_length = input_ids.shape[1]
+                self.position_ids = torch.arange(0, seq_length, dtype=torch.long, device=device)
+                self.position_ids = self.position_ids.unsqueeze(0).expand(batch_size, -1)
+                
                 outputs = self.model_collapsed(
                     input_ids=input_ids,
                     attention_mask=self.attention_mask,
                     position_ids=self.position_ids,
-                    use_cache=True,
+                    use_cache=True
                 )
             else:
                 # SUBSEQUENT STEPS: Process only the single newest token
                 new_token = input_ids[:, -1:]
-
-                # Extend mask and position_ids for Unsloth
-                next_mask = torch.ones((1, 1), dtype=torch.long, device=device)
-                self.attention_mask = torch.cat(
-                    [self.attention_mask, next_mask], dim=-1
-                )
+                
+                # Extend mask using the dynamic batch_size instead of hardcoded 1
+                next_mask = torch.ones((batch_size, 1), dtype=torch.long, device=device)
+                self.attention_mask = torch.cat([self.attention_mask, next_mask], dim=-1)
+                
+                # Extend position_ids (this naturally maintains the batch dimension)
                 self.position_ids = self.position_ids[:, -1:] + 1
-
+                
                 outputs = self.model_collapsed(
                     input_ids=new_token,
                     attention_mask=self.attention_mask,
                     position_ids=self.position_ids,
                     past_key_values=self.past_key_values,
-                    use_cache=True,
+                    use_cache=True
                 )
 
             # Safely unpack the output (handling Unsloth's tuple optimization)
