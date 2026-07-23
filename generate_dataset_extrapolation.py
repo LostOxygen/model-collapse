@@ -229,7 +229,7 @@ model_base, tokenizer = FastLanguageModel.from_pretrained(
     max_seq_length=block_size,
     dtype=None,
     load_in_4bit=True,
-).to("cuda")
+)
 FastLanguageModel.for_inference(model_base)
 
 model_collapsed, _ = FastLanguageModel.from_pretrained(
@@ -237,7 +237,7 @@ model_collapsed, _ = FastLanguageModel.from_pretrained(
     max_seq_length=block_size,
     dtype=None,
     load_in_4bit=True,
-).to("cuda")
+)
 FastLanguageModel.for_inference(model_collapsed)
 
 # load the base subdataset from the previous generation
