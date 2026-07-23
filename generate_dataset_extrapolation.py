@@ -53,7 +53,9 @@ def extrapolated_output(
     for prompt in prompts:
         input_ids = tokenizer(
             prompt,
-            return_tensors="pt"
+            return_tensors="pt",
+            truncation=True,
+            max_length=max_new_tokens,
         ).input_ids.to(device)
 
         for _ in range(max_new_tokens):
