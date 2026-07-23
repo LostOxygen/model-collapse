@@ -92,12 +92,12 @@ def extrapolated_output(
     device = model_base.device
 
     for prompt in prompts:
-        input_ids = tokenizer(
+        full_input = tokenizer(
             prompt,
             return_tensors="pt",
             truncation=True,
             max_length=max_new_tokens,
-        ).input_ids.to(device)
+        ).to(device)
 
         # 1. Initialize variables to hold the cache state
         past_kv_base = None
@@ -106,7 +106,8 @@ def extrapolated_output(
         # 2. 'current_input' will change.
         # Step 1: It's the full prompt.
         # Step 2+: It's ONLY the single newest token.
-        attention_mask = input_ids.attention_mask
+        attention_mask = full_input.attention_mask
+        input_ids = full_input.input_ids
         current_input = input_ids
 
         for _ in range(max_new_tokens):
