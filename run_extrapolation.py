@@ -1,6 +1,7 @@
 """main hook to start the pitfall 1 fine-tuning"""
 # -*- coding: utf-8 -*-
 # !/usr/bin/env python3
+from unsloth import FastLanguageModel
 
 import os
 import time
@@ -12,15 +13,12 @@ import argparse
 import subprocess
 import psutil
 
-from unsloth import FastLanguageModel, is_bfloat16_supported
 import torch
 from torch.utils.data import DataLoader
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 import seaborn as sns
 from tqdm import tqdm
-from trl import SFTTrainer
-from transformers import TrainingArguments, DataCollatorForLanguageModeling
 from datasets import load_dataset, Dataset, concatenate_datasets
 
 from utils.colors import TColors
@@ -265,7 +263,7 @@ def main(
     # preprocess the dataset
     chunked_dataset = original_dataset
     chunked_dataset.save_to_disk(
-        DATASET_PATH + f"chunked_dataset_bs{block_size}_{specifier_name}"
+        DATASET_PATH + f"chunked_dataset_bs{block_size}_{specifier_name}_ex"
     )
     # the dataloader is later used for the generation of the new dataset
     # chunked_dataloader = DataLoader(
