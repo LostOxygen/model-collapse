@@ -102,8 +102,8 @@ def extrapolated_output(
         for _ in range(max_new_tokens):
             with torch.no_grad():
                 # Get logits for the last token from both models
-                logits_base = model_base(input_ids).logits[:, -1, :]
-                logits_collapsed = model_collapsed(input_ids).logits[:, -1, :]
+                logits_base = model_base(input_ids, cache=True).logits[:, -1, :]
+                logits_collapsed = model_collapsed(input_ids, cache=True).logits[:, -1, :]
 
             # Apply the N-generation extrapolation
             # L_n = L_base + N * (L_collapsed - L_base)
@@ -253,37 +253,48 @@ for _, data_batch in tqdm(enumerate(dataset_loader), total=len(dataset_loader)):
         # also collect the instructions for the new dataset later
         instructions.append(instr)
 
-    inputs = tokenizer(
-        inputs,
-        padding=True,
-        truncation=True,
-        return_tensors="pt",
-    ).to("cuda")
-
-    # use a custom logits processor to apply the logit extrapolation during generation
-    logits_processors = LogitsProcessorList(
-        [
-            CollapseExtrapolationProcessor(
-                model_collapsed=model_collapsed,
-                generation_n=generation
-            )
-        ]
-    )
-
-    generated_answers = model_base.generate(
-        **inputs,
-        repetition_penalty=3.0,
-        min_new_tokens=128,
+    generated_answers = extrapolated_output(
+        prompts=inputs,
+        model_base=model_base,
+        model_collapsed=model_collapsed,
+        tokenizer=tokenizer,
         max_new_tokens=block_size,
-        logits_processor=logits_processors,
-        use_cache=True,
+        generation_n=generation,
     )
 
-    generated_answers = tokenizer.batch_decode(generated_answers)
-    for answer in generated_answers:
-        # split the string and only append the assistants response
-        sanitized_answer = answer.split("<|im_start|>assistant")[-1]
-        new_responses.append(sanitized_answer)
+    new_responses += generated_answers
+
+    # inputs = tokenizer(
+    #     inputs,
+    #     padding=True,
+    #     truncation=True,
+    #     return_tensors="pt",
+    # ).to("cuda")
+
+    # # use a custom logits processor to apply the logit extrapolation during generation
+    # logits_processors = LogitsProcessorList(
+    #     [
+    #         CollapseExtrapolationProcessor(
+    #             model_collapsed=model_collapsed,
+    #             generation_n=generation
+    #         )
+    #     ]
+    # )
+
+    # generated_answers = model_base.generate(
+    #     **inputs,
+    #     repetition_penalty=3.0,
+    #     min_new_tokens=128,
+    #     max_new_tokens=block_size,
+    #     logits_processor=logits_processors,
+    #     use_cache=True,
+    # )
+
+    # generated_answers = tokenizer.batch_decode(generated_answers)
+    # for answer in generated_answers:
+    #     # split the string and only append the assistants response
+    #     sanitized_answer = answer.split("<|im_start|>assistant")[-1]
+    #     new_responses.append(sanitized_answer)
 
 # save the new dataset to disk
 new_dataset = Dataset.from_dict(
