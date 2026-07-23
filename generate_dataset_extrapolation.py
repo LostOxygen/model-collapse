@@ -83,11 +83,11 @@ def extrapolated_output(
 
         outputs.append(input_ids)
 
-        decoded_output = tokenizer.decode(outputs, skip_special_tokens=True)
-        for output in decoded_output:
-            # split the string and only append the assistants response
-            sanitized_output = output.split("<|im_start|>assistant")[-1]
-            sanitized_outputs.append(sanitized_output)
+    decoded_output = tokenizer.decode(outputs, skip_special_tokens=True)
+    for output in decoded_output:
+        # split the string and only append the assistants response
+        sanitized_output = output.split("<|im_start|>assistant")[-1]
+        sanitized_outputs.append(sanitized_output)
 
     return sanitized_outputs
 
