@@ -12,6 +12,7 @@ Args:
 Returns:
     None
 """
+from unsloth import FastLanguageModel
 
 import os
 import argparse
@@ -21,7 +22,6 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
-from unsloth import FastLanguageModel
 
 from utils.colors import TColors
 
@@ -167,7 +167,7 @@ model_base, tokenizer = FastLanguageModel.from_pretrained(
 FastLanguageModel.for_inference(model_base)
 
 model_collapsed, _ = FastLanguageModel.from_pretrained(
-    model_name=f"{MODEL_PATH}model_{generation-1}_bs{block_size}_{specifier_name}",
+    model_name=f"{MODEL_PATH}model_0_bs{block_size}_{specifier_name}",
     max_seq_length=block_size,
     dtype=None,
     load_in_4bit=True,
