@@ -29,154 +29,73 @@ DATASET_PATH: str = "./generated_datasets/"
 MODEL_PATH: str = "./model_outputs/"
 MODEL_SPECIFIER: str = "unsloth/Qwen2.5-Coder-0.5B-Instruct"
 
-class CollapseExtrapolationProcessor(LogitsProcessor):
-    def __init__(self, model_collapsed: AutoModelForCausalLM, generation_n: float):
+class UnslothExtrapolationProcessor(LogitsProcessor):
+    def __init__(self, model_collapsed, generation_n: float):
         """
-        Custom processor to apply logit extrapolation during native model.generate().
-        It maintains its own KV-cache for the secondary model to ensure fast inference.
+        Injects the extrapolation math directly into the native Unsloth generate() function.
+        It maintains its own Unsloth-compatible KV-cache for the secondary model.
         """
         self.model_collapsed = model_collapsed
         self.generation_n = generation_n
+
+        # Internal state for the secondary model's cache
         self.past_key_values = None
+        self.attention_mask = None
+        self.position_ids = None
 
     def __call__(
         self, input_ids: torch.LongTensor, scores: torch.FloatTensor
     ) -> torch.FloatTensor:
-        # 'scores' are the logits from model_base for the NEXT token.
-        # 'input_ids' contains the full sequence generated so far.
+        # 'scores' are the highly-optimized logits from model_base
+        # 'input_ids' contains the sequence generated so far
+        device = input_ids.device
 
         with torch.no_grad():
             if self.past_key_values is None:
-                # FIRST STEP: We have no cache yet. Run the full input sequence.
-                outputs = self.model_collapsed(input_ids, use_cache=True)
-            else:
-                # SUBSEQUENT STEPS: KV-Caching in action!
-                # We only pass the SINGLE newest token (input_ids[:, -1:]).
-                # This makes it hundreds of times faster.
+                # FIRST STEP: Process the full prompt for the secondary model
+                self.attention_mask = torch.ones_like(input_ids, device=device)
+                self.position_ids = torch.arange(
+                    0, input_ids.shape[1], dtype=torch.long, device=device
+                ).unsqueeze(0)
+
                 outputs = self.model_collapsed(
-                    input_ids[:, -1:],
+                    input_ids=input_ids,
+                    attention_mask=self.attention_mask,
+                    position_ids=self.position_ids,
+                    use_cache=True,
+                )
+            else:
+                # SUBSEQUENT STEPS: Process only the single newest token
+                new_token = input_ids[:, -1:]
+
+                # Extend mask and position_ids for Unsloth
+                next_mask = torch.ones((1, 1), dtype=torch.long, device=device)
+                self.attention_mask = torch.cat(
+                    [self.attention_mask, next_mask], dim=-1
+                )
+                self.position_ids = self.position_ids[:, -1:] + 1
+
+                outputs = self.model_collapsed(
+                    input_ids=new_token,
+                    attention_mask=self.attention_mask,
+                    position_ids=self.position_ids,
                     past_key_values=self.past_key_values,
                     use_cache=True,
                 )
 
-            # Update the cache for the next step
-            self.past_key_values = outputs.past_key_values
+            # Safely unpack the output (handling Unsloth's tuple optimization)
+            if isinstance(outputs, tuple):
+                logits_gen1 = outputs[0][:, -1, :]
+                self.past_key_values = outputs[1]
+            else:
+                logits_gen1 = outputs.logits[:, -1, :]
+                self.past_key_values = outputs.past_key_values
 
-            # Get the logits for the last token from the secondary model
-            logits_collapsed = outputs.logits[:, -1, :]
-
-        # Apply the logit extrapolation math
-        # L_n = L_base + N * (L_gen1 - L_base)
-        extrapolated_scores = scores + self.generation_n * (logits_collapsed - scores)
+        # Apply the N-generation extrapolation math
+        collapse_vector = logits_gen1 - scores
+        extrapolated_scores = scores + (self.generation_n * collapse_vector)
 
         return extrapolated_scores
-
-def extrapolated_output(
-    prompts: list[str],
-    model_base: AutoModelForCausalLM,
-    model_collapsed: AutoModelForCausalLM,
-    tokenizer: AutoTokenizer,
-    generation_n: float,
-    max_new_tokens: int = 2028,
-    temperature: float = 0.0,
-) -> str:
-    """
-    Simulates the Nth generation of model collapse by multiplying the
-    logit difference between the baseline and Gen 1 models.
-    """
-    model_base.eval()
-    model_collapsed.eval()
-
-    outputs = []
-    sanitized_outputs = []
-    device = model_base.device
-
-    for prompt in prompts:
-        full_input = tokenizer(
-            prompt,
-            return_tensors="pt",
-            truncation=True,
-            max_length=max_new_tokens,
-        ).to(device)
-
-        # 1. Initialize variables to hold the cache state
-        past_kv_base = None
-        past_kv_collapsed = None
-
-        # 2. 'current_input' will change.
-        # Step 1: It's the full prompt.
-        # Step 2+: It's ONLY the single newest token.
-        attention_mask = full_input.attention_mask
-        input_ids = full_input.input_ids
-        current_input = input_ids
-        current_position_ids = torch.arange(
-            0, input_ids.shape[1], dtype=torch.long, device=device
-        ).unsqueeze(0)
-
-        for _ in range(max_new_tokens):
-            with torch.no_grad():
-                # Pass the cache and only the current_input
-                outputs_base = model_base(
-                    current_input,
-                    past_key_values=past_kv_base,
-                    attention_mask=attention_mask,
-                    position_ids=current_position_ids,
-                    use_cache=True,
-                    return_dict=True,
-                )
-                outputs_collapsed = model_collapsed(
-                    current_input,
-                    past_key_values=past_kv_collapsed,
-                    attention_mask=attention_mask,
-                    position_ids=current_position_ids,
-                    use_cache=True,
-                    return_dict=True,
-                )
-
-                # Extract logits for the last token in current_input
-                logits_base = outputs_base.logits[:, -1, :]
-                logits_collapsed = outputs_collapsed.logits[:, -1, :]
-
-                # 3. Update our cache states for the next iteration
-                past_kv_base = outputs_base.past_key_values
-                past_kv_collapsed = outputs_collapsed.past_key_values
-
-            # Extrapolation Math
-            collapse_vector = logits_collapsed - logits_base
-            extrapolated_logits = logits_base + (generation_n * collapse_vector)
-
-            # Token Selection
-            if temperature > 0:
-                scaled_logits = extrapolated_logits / temperature
-                probs = torch.softmax(scaled_logits, dim=-1)
-                next_token = torch.multinomial(probs, num_samples=1)
-            else:
-                next_token = torch.argmax(extrapolated_logits, dim=-1).unsqueeze(0)
-
-            # 4. Append to the full record for decoding and update the attention mask
-            input_ids = torch.cat([input_ids, next_token], dim=-1)
-            next_mask = torch.ones((1, 1), dtype=torch.long, device=device)
-            attention_mask = torch.cat([attention_mask, next_mask], dim=-1)
-
-            # update the position ids for the next token
-            # If the last token was at position 4, this makes the new position [[5]]
-            current_position_ids = current_position_ids[:, -1:] + 1
-
-            # 5. CRITICAL: Update current_input to ONLY be the new token for the next loop
-            current_input = next_token
-
-            if next_token.item() == tokenizer.eos_token_id:
-                break
-
-        outputs.append(input_ids)
-
-    decoded_output = tokenizer.decode(outputs, skip_special_tokens=True)
-    for output in decoded_output:
-        # split the string and only append the assistants response
-        sanitized_output = output.split("<|im_start|>assistant")[-1]
-        sanitized_outputs.append(sanitized_output)
-
-    return sanitized_outputs
 
 
 parser = argparse.ArgumentParser(description="Data Generation")
@@ -297,48 +216,37 @@ for _, data_batch in tqdm(enumerate(dataset_loader), total=len(dataset_loader)):
         # also collect the instructions for the new dataset later
         instructions.append(instr)
 
-    generated_answers = extrapolated_output(
-        prompts=inputs,
-        model_base=model_base,
-        model_collapsed=model_collapsed,
-        tokenizer=tokenizer,
-        max_new_tokens=block_size,
-        generation_n=generation,
+    inputs = tokenizer(
+        inputs,
+        padding=True,
+        truncation=True,
+        return_tensors="pt",
+    ).to("cuda")
+
+    # use a custom logits processor to apply the logit extrapolation during generation
+    logits_processors = LogitsProcessorList(
+        [
+            UnslothExtrapolationProcessor(
+                model_collapsed=model_collapsed,
+                generation_n=generation
+            )
+        ]
     )
 
-    new_responses += generated_answers
+    generated_answers = model_base.generate(
+        **inputs,
+        repetition_penalty=3.0,
+        min_new_tokens=128,
+        max_new_tokens=block_size,
+        logits_processor=logits_processors,
+        use_cache=True,
+    )
 
-    # inputs = tokenizer(
-    #     inputs,
-    #     padding=True,
-    #     truncation=True,
-    #     return_tensors="pt",
-    # ).to("cuda")
-
-    # # use a custom logits processor to apply the logit extrapolation during generation
-    # logits_processors = LogitsProcessorList(
-    #     [
-    #         CollapseExtrapolationProcessor(
-    #             model_collapsed=model_collapsed,
-    #             generation_n=generation
-    #         )
-    #     ]
-    # )
-
-    # generated_answers = model_base.generate(
-    #     **inputs,
-    #     repetition_penalty=3.0,
-    #     min_new_tokens=128,
-    #     max_new_tokens=block_size,
-    #     logits_processor=logits_processors,
-    #     use_cache=True,
-    # )
-
-    # generated_answers = tokenizer.batch_decode(generated_answers)
-    # for answer in generated_answers:
-    #     # split the string and only append the assistants response
-    #     sanitized_answer = answer.split("<|im_start|>assistant")[-1]
-    #     new_responses.append(sanitized_answer)
+    generated_answers = tokenizer.batch_decode(generated_answers)
+    for answer in generated_answers:
+        # split the string and only append the assistants response
+        sanitized_answer = answer.split("<|im_start|>assistant")[-1]
+        new_responses.append(sanitized_answer)
 
 # save the new dataset to disk
 new_dataset = Dataset.from_dict(
