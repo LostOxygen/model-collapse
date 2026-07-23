@@ -21,7 +21,7 @@ from datasets import Dataset
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer, LogitsProcessor, LogitsProcessorList
 
 from utils.colors import TColors
 
@@ -29,6 +29,47 @@ DATASET_PATH: str = "./generated_datasets/"
 MODEL_PATH: str = "./model_outputs/"
 MODEL_SPECIFIER: str = "unsloth/Qwen2.5-Coder-0.5B-Instruct"
 
+class CollapseExtrapolationProcessor(LogitsProcessor):
+    def __init__(self, model_collapsed: AutoModelForCausalLM, generation_n: float):
+        """
+        Custom processor to apply logit extrapolation during native model.generate().
+        It maintains its own KV-cache for the secondary model to ensure fast inference.
+        """
+        self.model_collapsed = model_collapsed
+        self.generation_n = generation_n
+        self.past_key_values = None
+
+    def __call__(
+        self, input_ids: torch.LongTensor, scores: torch.FloatTensor
+    ) -> torch.FloatTensor:
+        # 'scores' are the logits from model_base for the NEXT token.
+        # 'input_ids' contains the full sequence generated so far.
+
+        with torch.no_grad():
+            if self.past_key_values is None:
+                # FIRST STEP: We have no cache yet. Run the full input sequence.
+                outputs = self.model_collapsed(input_ids, use_cache=True)
+            else:
+                # SUBSEQUENT STEPS: KV-Caching in action!
+                # We only pass the SINGLE newest token (input_ids[:, -1:]).
+                # This makes it hundreds of times faster.
+                outputs = self.model_collapsed(
+                    input_ids[:, -1:],
+                    past_key_values=self.past_key_values,
+                    use_cache=True,
+                )
+
+            # Update the cache for the next step
+            self.past_key_values = outputs.past_key_values
+
+            # Get the logits for the last token from the secondary model
+            logits_gen1 = outputs.logits[:, -1, :]
+
+        # Apply the logit extrapolation math
+        # L_n = L_base + N * (L_gen1 - L_base)
+        extrapolated_scores = scores + self.generation_n * (logits_gen1 - scores)
+
+        return extrapolated_scores
 
 def extrapolated_output(
     prompts: list[str],
@@ -37,7 +78,7 @@ def extrapolated_output(
     tokenizer: AutoTokenizer,
     generation_n: float,
     max_new_tokens: int = 2028,
-    temperature: float = 1.0,
+    temperature: float = 0.0,
 ) -> str:
     """
     Simulates the Nth generation of model collapse by multiplying the
@@ -212,16 +253,37 @@ for _, data_batch in tqdm(enumerate(dataset_loader), total=len(dataset_loader)):
         # also collect the instructions for the new dataset later
         instructions.append(instr)
 
-    generated_answers = extrapolated_output(
-        prompts=inputs,
-        model_base=model_base,
-        model_collapsed=model_collapsed,
-        tokenizer=tokenizer,
-        max_new_tokens=block_size,
-        generation_n=generation,
+    inputs = tokenizer(
+        inputs,
+        padding=True,
+        truncation=True,
+        return_tensors="pt",
+    ).to("cuda")
+
+    # use a custom logits processor to apply the logit extrapolation during generation
+    logits_processors = LogitsProcessorList(
+        [
+            CollapseExtrapolationProcessor(
+                model_collapsed=model_collapsed,
+                generation_n=generation
+            )
+        ]
     )
 
-    new_responses += generated_answers
+    generated_answers = model_base.generate(
+        **inputs,
+        repetition_penalty=3.0,
+        min_new_tokens=128,
+        max_new_tokens=block_size,
+        logits_processor=logits_processors,
+        use_cache=True,
+    )
+
+    generated_answers = tokenizer.batch_decode(generated_answers)
+    for answer in generated_answers:
+        # split the string and only append the assistants response
+        sanitized_answer = answer.split("<|im_start|>assistant")[-1]
+        new_responses.append(sanitized_answer)
 
 # save the new dataset to disk
 new_dataset = Dataset.from_dict(
