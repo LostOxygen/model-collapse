@@ -109,6 +109,9 @@ def extrapolated_output(
         attention_mask = full_input.attention_mask
         input_ids = full_input.input_ids
         current_input = input_ids
+        current_position_ids = torch.arange(
+            0, input_ids.shape[1], dtype=torch.long, device=device
+        ).unsqueeze(0)
 
         for _ in range(max_new_tokens):
             with torch.no_grad():
@@ -117,13 +120,15 @@ def extrapolated_output(
                     current_input,
                     past_key_values=past_kv_base,
                     attention_mask=attention_mask,
-                    use_cache=True
+                    position_ids=current_position_ids,
+                    use_cache=True,
                 )
                 outputs_collapsed = model_collapsed(
                     current_input,
                     past_key_values=past_kv_collapsed,
                     attention_mask=attention_mask,
-                    use_cache=True
+                    position_ids=current_position_ids,
+                    use_cache=True,
                 )
 
                 # Extract logits for the last token in current_input
@@ -150,6 +155,10 @@ def extrapolated_output(
             input_ids = torch.cat([input_ids, next_token], dim=-1)
             next_mask = torch.ones((1, 1), dtype=torch.long, device=device)
             attention_mask = torch.cat([attention_mask, next_mask], dim=-1)
+
+            # update the position ids for the next token
+            # If the last token was at position 4, this makes the new position [[5]]
+            current_position_ids = current_position_ids[:, -1:] + 1
 
             # 5. CRITICAL: Update current_input to ONLY be the new token for the next loop
             current_input = next_token
