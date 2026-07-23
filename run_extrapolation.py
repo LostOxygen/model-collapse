@@ -30,8 +30,8 @@ DATASET_SPECIFIER: str = "bigcode/self-oss-instruct-sc2-exec-filter-50k"
 MODEL_PATH: str = "./model_outputs/"
 DATASET_PATH: str = "./generated_datasets/"
 EOS_TOKEN: str = None  # will be overwritten by the tokenizer
-MAX_TOKEN_LENGTH: Final[int] = None # will be overwritten
-TOKENIZER = None # will be overwritten
+MAX_TOKEN_LENGTH: Final[int] = None  # will be overwritten
+TOKENIZER = None  # will be overwritten
 
 
 def format_prompt(examples: dict) -> dict:
@@ -44,9 +44,12 @@ def format_prompt(examples: dict) -> dict:
 
     for instr, answer in zip(user_inputs, completion_data):
         prompt = [
-            {"role": "system", "content": "You are a helpful assistant for code completion."},
+            {
+                "role": "system",
+                "content": "You are a helpful assistant for code completion.",
+            },
             {"role": "user", "content": instr},
-            {"role": "assistant", "content": answer}
+            {"role": "assistant", "content": answer},
         ]
         formatted_prompt = TOKENIZER.apply_chat_template(
             prompt, tokenize=False, add_special_tokens=False
@@ -192,7 +195,7 @@ def main(
     print(f"## {TColors.OKBLUE}{TColors.BOLD}Device{TColors.ENDC}: {device}")
     if (device == "cuda" or torch.device("cuda", 0)) and torch.cuda.is_available():
         print(
-            f"## {TColors.OKBLUE}{TColors.BOLD}Number of GPUs{TColors.ENDC}: " \
+            f"## {TColors.OKBLUE}{TColors.BOLD}Number of GPUs{TColors.ENDC}: "
             f"{torch.cuda.device_count()}"
         )
         print(
@@ -246,7 +249,7 @@ def main(
     )
     if continue_from_generation > 0:
         print(
-            f"## {TColors.OKBLUE}{TColors.BOLD}Continue from Generation{TColors.ENDC}: " \
+            f"## {TColors.OKBLUE}{TColors.BOLD}Continue from Generation{TColors.ENDC}: "
             f"{continue_from_generation}"
         )
     print("#" * os.get_terminal_size().columns + "\n")
@@ -283,7 +286,7 @@ def main(
             model, tokenizer = FastLanguageModel.from_pretrained(
                 model_name=MODEL_SPECIFIER
                 if gen_id == 0
-                else f"{MODEL_PATH}model_{gen_id-1}_bs{block_size}_{specifier_name}",
+                else f"{MODEL_PATH}model_{gen_id - 1}_bs{block_size}_{specifier_name}",
                 max_seq_length=block_size,
                 dtype=None,
                 load_in_4bit=True,
@@ -307,7 +310,7 @@ def main(
                 bias="none",  # Supports any, but = "none" is optimized
                 use_gradient_checkpointing="unsloth",  # True or "unsloth" for very long context
                 random_state=1337,
-                #task_type="CAUSAL_LM",
+                # task_type="CAUSAL_LM",
                 use_rslora=False,  # We support rank stabilized LoRA
                 loftq_config=None,  # And LoftQ
             )
@@ -316,7 +319,8 @@ def main(
             if gen_id > 0:
                 # if the first training iteration is done, load the generated dataset from the disk
                 dataset = Dataset.load_from_disk(
-                    DATASET_PATH + f"generated_dataset_{gen_id - 1}_bs{block_size}_{specifier_name}"
+                    DATASET_PATH
+                    + f"generated_dataset_{gen_id - 1}_bs{block_size}_{specifier_name}"
                 )
                 dataset = dataset.map(format_prompt, batched=True)
             else:
@@ -382,10 +386,10 @@ def main(
             used_percentage = round(used_memory / max_memory * 100, 3)
             lora_percentage = round(used_memory_for_lora / max_memory * 100, 3)
             print(
-                f"{trainer_stats.metrics["train_runtime"]} seconds used for training."
+                f"{trainer_stats.metrics['train_runtime']} seconds used for training."
             )
             print(
-                f"{round(trainer_stats.metrics["train_runtime"] / 60, 2)} min. used for training."
+                f"{round(trainer_stats.metrics['train_runtime'] / 60, 2)} min. used for training."
             )
             print(f"Peak reserved memory = {used_memory} GB.")
             print(f"Peak reserved memory for training = {used_memory_for_lora} GB.")
@@ -408,7 +412,7 @@ def main(
             trainer.model.save_pretrained_merged(
                 f"{MODEL_PATH}model_{gen_id}_bs{block_size}_{specifier_name}_fp16",
                 trainer.tokenizer,
-                save_method="merged_16bit"
+                save_method="merged_16bit",
             )
 
             del trainer
@@ -438,14 +442,14 @@ def main(
                 )
                 temp_subdataset.save_to_disk(
                     DATASET_PATH
-                    + f"base_subdataset_bs{block_size}_{specifier_name}_shard{shard_id}"
+                    + f"base_subdataset_bs{block_size}_{specifier_name}_ex_shard{shard_id}"
                 )
                 process = subprocess.Popen(
                     [
                         "env",
                         f"CUDA_VISIBLE_DEVICES={d_id}",
                         "python",
-                        "generate_dataset.py",
+                        "generate_dataset_extrapolation.py",
                         "--block_size",
                         str(block_size),
                         "--specifier_name",
@@ -474,13 +478,14 @@ def main(
                 [
                     Dataset.load_from_disk(
                         DATASET_PATH
-                        + f"subdataset_{gen_id}_bs{block_size}_{specifier_name}_shard{shard_id}"
+                        + f"subdataset_{gen_id}_bs{block_size}_{specifier_name}_ex_shard{shard_id}"
                     )
                     for shard_id in range(len(devices))
                 ]
             )
             merged_dataset.save_to_disk(
-                DATASET_PATH + f"generated_dataset_{gen_id}_bs{block_size}_{specifier_name}"
+                DATASET_PATH
+                + f"generated_dataset_{gen_id}_bs{block_size}_{specifier_name}_ex"
             )
 
     # ────────────────── evaluate the models' perplexity and other metrics ─────────────────────────
@@ -498,24 +503,24 @@ def main(
             # load the model
             perpl_model, perpl_tokenizer = FastLanguageModel.from_pretrained(
                 model_name=MODEL_SPECIFIER,
-                max_seq_length=int(block_size*2),
+                max_seq_length=int(block_size * 2),
                 dtype=None,
                 load_in_4bit=True,
             )
 
             FastLanguageModel.for_inference(perpl_model)
             for i in range(num_generations):
-
                 # load the dataset
                 if i == 0:
                     # for the first generation, use the original dataset
                     ppl_dataset = Dataset.load_from_disk(
-                        DATASET_PATH + f"/chunked_dataset_bs{block_size}_{specifier_name}"
+                        DATASET_PATH
+                        + f"/chunked_dataset_bs{block_size}_{specifier_name}"
                     )
                 else:
                     ppl_dataset = Dataset.load_from_disk(
                         DATASET_PATH
-                        + f"/generated_dataset_{i - 1}_bs{block_size}_{specifier_name}"
+                        + f"/generated_dataset_{i - 1}_bs{block_size}_{specifier_name}_ex"
                     )
 
                 ppl_dataloader = DataLoader(
@@ -530,20 +535,13 @@ def main(
                 for data_batch in tqdm(
                     ppl_dataloader, desc=f"Calculating perplexity for Generation {i}"
                 ):
-
                     prompt = [
                         {
                             "role": "system",
-                            "content": "You are a helpful assistant for code completion."
+                            "content": "You are a helpful assistant for code completion.",
                         },
-                        {
-                            "role": "user",
-                            "content": data_batch["instruction"][0]
-                        },
-                        {
-                            "role": "assistant",
-                            "content": data_batch["response"][0]
-                        }
+                        {"role": "user", "content": data_batch["instruction"][0]},
+                        {"role": "assistant", "content": data_batch["response"][0]},
                     ]
 
                     formatted_prompt = perpl_tokenizer.apply_chat_template(
@@ -574,30 +572,30 @@ def main(
             # save the perplexity dict to a file
             torch.save(
                 perplexity_dict,
-                DATASET_PATH + f"perplexity_dict_bs{block_size}_{specifier_name}.pt",
+                DATASET_PATH + f"perplexity_dict_bs{block_size}_{specifier_name}_ex.pt",
             )  # save the dict to a file
             print(
                 f"## {TColors.OKBLUE}{TColors.BOLD}Saved the perplexity dict under: "
-                f"{TColors.HEADER}{DATASET_PATH}perplexity_dict_bs{block_size}_{specifier_name}" \
+                f"{TColors.HEADER}{DATASET_PATH}perplexity_dict_bs{block_size}_{specifier_name}_ex"
                 f".pt{TColors.ENDC}"
             )
             # save the all_perplexities list to a file
             torch.save(
                 all_perplexities,
-                DATASET_PATH + f"all_perplexities_bs{block_size}_{specifier_name}.pt",
+                DATASET_PATH + f"all_perplexities_bs{block_size}_{specifier_name}_ex.pt",
             )  # save the list to a file
             print(
                 f"## {TColors.OKBLUE}{TColors.BOLD}Saved the all_perplexities list under: "
-                f"{TColors.HEADER}{DATASET_PATH}all_perplexities_bs{block_size}_{specifier_name}" \
+                f"{TColors.HEADER}{DATASET_PATH}all_perplexities_bs{block_size}_{specifier_name}_ex"
                 f".pt{TColors.ENDC}"
             )
         else:
             # load the perplexity dict and all_perplexities list from the files
             perplexity_dict = torch.load(
-                DATASET_PATH + f"perplexity_dict_bs{block_size}_{specifier_name}.pt"
+                DATASET_PATH + f"perplexity_dict_bs{block_size}_{specifier_name}_ex.pt"
             )
             all_perplexities = torch.load(
-                DATASET_PATH + f"all_perplexities_bs{block_size}_{specifier_name}.pt"
+                DATASET_PATH + f"all_perplexities_bs{block_size}_{specifier_name}_ex.pt"
             )
 
         # ────────────────── plot the perplexity histogram ─────────────────────────
@@ -629,24 +627,26 @@ def main(
         sns.set_palette(cb_palette)
         sns.set_style("whitegrid")
 
-        mpl.rcParams.update({
-            "text.usetex": True,
-            "text.latex.preamble": r"\usepackage{bm}",
-            "font.family": "serif",
-            "font.serif": ["Times"],
-            "font.size": 22,
-            "font.weight": "bold",             # <--- Make default font bold
-            "axes.labelsize": 22,
-            "axes.labelweight": "bold",        # <--- Bold axis labels
-            "axes.titlesize": 20,
-            "axes.titleweight": "bold",        # <--- Bold title
-            "legend.fontsize": 17,
-            "xtick.labelsize": 20,
-            "ytick.labelsize": 20,
-            "xtick.major.width": 2,          # Optional: thicker ticks
-            "ytick.major.width": 2,
-            "pdf.compression": 9
-        })
+        mpl.rcParams.update(
+            {
+                "text.usetex": True,
+                "text.latex.preamble": r"\usepackage{bm}",
+                "font.family": "serif",
+                "font.serif": ["Times"],
+                "font.size": 22,
+                "font.weight": "bold",  # <--- Make default font bold
+                "axes.labelsize": 22,
+                "axes.labelweight": "bold",  # <--- Bold axis labels
+                "axes.titlesize": 20,
+                "axes.titleweight": "bold",  # <--- Bold title
+                "legend.fontsize": 17,
+                "xtick.labelsize": 20,
+                "ytick.labelsize": 20,
+                "xtick.major.width": 2,  # Optional: thicker ticks
+                "ytick.major.width": 2,
+                "pdf.compression": 9,
+            }
+        )
 
         plt.figure(figsize=(10, 6))
         for name, perplexities in perplexity_dict.items():
@@ -665,7 +665,7 @@ def main(
 
         plt.xlabel("Perplexity", fontweight="bold")
         plt.ylabel("Probability", fontweight="bold")
-        plt.title("Perplexity without extrapolation", fontweight="bold")
+        plt.title("Perplexity with extrapolation", fontweight="bold")
         plt.legend(loc="upper right")
 
         for spine in plt.gca().spines.values():
@@ -677,13 +677,13 @@ def main(
         if not os.path.exists("plots/"):
             os.makedirs("plots/")
 
-        plt.savefig(f"plots/perplexity_histogram_bs{block_size}_{specifier_name}.pdf")
-        plt.savefig(f"plots/perplexity_histogram_bs{block_size}_{specifier_name}.png")
+        plt.savefig(f"plots/perplexity_histogram_bs{block_size}_{specifier_name}_ex.pdf")
+        plt.savefig(f"plots/perplexity_histogram_bs{block_size}_{specifier_name}_ex.png")
         plt.show()
 
         print(
             f"## {TColors.OKBLUE}{TColors.BOLD}Saved the histogram under: "
-            f"{TColors.HEADER}plots/perplexity_histogram_bs{block_size}_{specifier_name}" \
+            f"{TColors.HEADER}plots/perplexity_histogram_bs{block_size}_{specifier_name}_ex"
             f".<png,pdf>{TColors.ENDC}"
         )
 
@@ -708,7 +708,7 @@ def main(
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Model Collapse")
+    parser = argparse.ArgumentParser(description="Model Collapse Extrapolation")
     parser.add_argument(
         "--device",
         "-dx",
@@ -774,7 +774,7 @@ if __name__ == "__main__":
         "-ms",
         type=str,
         default="unsloth/Qwen2.5-Coder-0.5B-Instruct",
-        help="model specifier to use for the training (default: unsloth/Qwen2.5-Coder-0.5B-Instruct)",
+        help="model specifier to use for the training (def: unsloth/Qwen2.5-Coder-0.5B-Instruct)",
     )
     parser.add_argument(
         "--continue_from_generation",
