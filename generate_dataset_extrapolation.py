@@ -91,6 +91,24 @@ class UnslothExtrapolationProcessor(LogitsProcessor):
                 logits_gen1 = outputs.logits[:, -1, :]
                 self.past_key_values = outputs.past_key_values
 
+            # 1. Cast to float32 to prevent overflow during multiplication
+            scores_f32 = scores.to(torch.float32)
+            logits_gen1_f32 = logits_gen1.to(torch.float32)
+
+            # 2. Apply the N-generation extrapolation math
+            collapse_vector = logits_gen1_f32 - scores_f32
+            extrapolated_scores = scores_f32 + (self.generation_n * collapse_vector)
+
+            # 3. Prevent Softmax Overflow!
+            # If logits > 88, e^x hits Infinity causing NaNs.
+            # Clamping to [-80.0, 80.0] ensures stable probabilities while keeping
+            # the extrapolated tokens heavily favored.
+            extrapolated_scores = torch.clamp(extrapolated_scores, min=-80.0, max=80.0)
+
+            # 4. Catch any unexpected NaNs and cast back to the model's native datatype
+            extrapolated_scores = torch.nan_to_num(extrapolated_scores, nan=0.0)
+            extrapolated_scores = extrapolated_scores.to(scores.dtype)
+
         # Apply the N-generation extrapolation math
         collapse_vector = logits_gen1 - scores
         extrapolated_scores = scores + (self.generation_n * collapse_vector)
