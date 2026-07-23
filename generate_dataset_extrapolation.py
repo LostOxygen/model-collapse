@@ -122,6 +122,7 @@ def extrapolated_output(
                     attention_mask=attention_mask,
                     position_ids=current_position_ids,
                     use_cache=True,
+                    return_dict=True,
                 )
                 outputs_collapsed = model_collapsed(
                     current_input,
@@ -129,6 +130,7 @@ def extrapolated_output(
                     attention_mask=attention_mask,
                     position_ids=current_position_ids,
                     use_cache=True,
+                    return_dict=True,
                 )
 
                 # Extract logits for the last token in current_input
