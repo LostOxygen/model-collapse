@@ -12,6 +12,7 @@ import datetime
 import argparse
 import subprocess
 import psutil
+import pytz
 
 import torch
 from torch.utils.data import DataLoader
@@ -172,7 +173,7 @@ def main(
     # set the block size
     global MAX_TOKEN_LENGTH
     MAX_TOKEN_LENGTH = max(token_counts)
-    block_size = MAX_TOKEN_LENGTH if MAX_TOKEN_LENGTH > block_size else block_size
+    block_size = max(block_size, MAX_TOKEN_LENGTH)
 
     # have a nice system status print
     print(
@@ -183,7 +184,11 @@ def main(
     )
     print(
         f"## {TColors.OKBLUE}{TColors.BOLD}Date{TColors.ENDC}: "
-        + str(datetime.datetime.now().strftime("%A, %d. %B %Y %I:%M%p"))
+        + str(
+            datetime.datetime.now(tz=pytz.timezone("Europe/Berlin")).strftime(
+                "%A, %d. %B %Y %I:%M%p"
+            )
+        )
     )
     print(
         f"## {TColors.OKBLUE}{TColors.BOLD}System{TColors.ENDC}: "
