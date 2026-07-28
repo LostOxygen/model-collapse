@@ -9,6 +9,8 @@ llama.cpp/
 model_outputs/
 .DS_Store
 *.csv
+.claude/
+CLAUDE.md
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
