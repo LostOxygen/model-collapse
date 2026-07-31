@@ -16,6 +16,7 @@ import psutil
 import pytz
 
 import torch
+from torch.nn import functional as F
 from torch.utils.data import DataLoader
 import matplotlib.pyplot as plt
 import matplotlib as mpl
@@ -74,6 +75,7 @@ def main(
     training_epochs: int = 5,
     dataset_batch_size: int = 10,
     training_batch_size: int = 8,
+    perplexity_batch_size: int = 16,
     skip_training: bool = False,
     num_generations: int = 5,
     block_size: int = 64,
@@ -90,6 +92,7 @@ def main(
         training_epochs (int): number of training epochs to run
         dataset_batch_size (int): batch size for the dataset
         training_batch_size (int): batch size for the training/eval
+        perplexity_batch_size (int): batch size for the perplexity calculation
         skip_training (bool): if True, skip the training and only evaluate the models
         num_generations (int): number of generations to run (default: 5)
         block_size (int): size of the blocks to split the dataset into (default: 64)
@@ -241,6 +244,10 @@ def main(
         f"## {TColors.OKBLUE}{TColors.BOLD}Training Batch Size{TColors.ENDC}: {training_batch_size}"
     )
     print(
+        f"## {TColors.OKBLUE}{TColors.BOLD}Perplexity Batch Size{TColors.ENDC}: "
+        f"{perplexity_batch_size}"
+    )
+    print(
         f"## {TColors.OKBLUE}{TColors.BOLD}Skip Training{TColors.ENDC}: {skip_training}"
     )
     print(
@@ -363,6 +370,12 @@ def main(
         )
 
         FastLanguageModel.for_inference(perpl_model)
+
+        # padding is needed to batch samples of different lengths together
+        if perpl_tokenizer.pad_token is None:
+            perpl_tokenizer.pad_token = perpl_tokenizer.eos_token
+        perpl_tokenizer.padding_side = "right"
+
         for i in range(num_generations):
             # load the dataset
             if i == 0:
@@ -379,7 +392,7 @@ def main(
 
             ppl_dataloader = DataLoader(
                 ppl_dataset.with_format("torch"),
-                batch_size=1,  # batch size for the perplexity calculation
+                batch_size=perplexity_batch_size,
             )
 
             # add new entry to the dict
@@ -389,32 +402,60 @@ def main(
             for data_batch in tqdm(
                 ppl_dataloader, desc=f"Calculating perplexity for Generation {i}"
             ):
-                prompt = [
-                    {
-                        "role": "system",
-                        "content": "You are a helpful assistant for code completion.",
-                    },
-                    {"role": "user", "content": data_batch["instruction"][0]},
-                    {"role": "assistant", "content": data_batch["response"][0]},
+                formatted_prompts = [
+                    perpl_tokenizer.apply_chat_template(
+                        [
+                            {
+                                "role": "system",
+                                "content": "You are a helpful assistant for code "
+                                "completion.",
+                            },
+                            {"role": "user", "content": instruction},
+                            {"role": "assistant", "content": response},
+                        ],
+                        tokenize=False,
+                        add_special_tokens=False,
+                    )
+                    for instruction, response in zip(
+                        data_batch["instruction"], data_batch["response"]
+                    )
                 ]
 
-                formatted_prompt = perpl_tokenizer.apply_chat_template(
-                    prompt, tokenize=False, add_special_tokens=False
-                )
-
                 inputs = perpl_tokenizer(
-                    formatted_prompt,
+                    formatted_prompts,
                     padding=True,
                     truncation=True,
                     return_tensors="pt",
                 ).to("cuda")
 
-                # calculate the perplexity for every datapoint in the dataset
+                # calculate the perplexity for every datapoint of the batch. The loss
+                # has to be computed manually (instead of passing labels to the model)
+                # since the model would average it over the whole batch and the padding
+                # tokens would be included in the loss
                 with torch.no_grad():
-                    outputs = perpl_model(**inputs, labels=inputs["input_ids"])
-                    loss = outputs.loss
-                    perplexity = torch.exp(loss)
-                    perplexity_dict[f"Generation {i}"].append(perplexity.item())
+                    logits = perpl_model(**inputs).logits
+
+                    # shift by one position to predict the next token
+                    shift_logits = logits[:, :-1, :].float()
+                    shift_labels = inputs["input_ids"][:, 1:]
+                    shift_mask = inputs["attention_mask"][:, 1:]
+
+                    token_losses = F.cross_entropy(
+                        shift_logits.transpose(1, 2),
+                        shift_labels,
+                        reduction="none",
+                    )
+
+                    # mask out the padding tokens and average over the real tokens only
+                    # to get one loss (and therefore perplexity) per single sample
+                    sample_losses = (token_losses * shift_mask).sum(dim=1) / (
+                        shift_mask.sum(dim=1).clamp(min=1)
+                    )
+                    perplexities = torch.exp(sample_losses)
+
+                    perplexity_dict[f"Generation {i}"].extend(
+                        perplexities.tolist()
+                    )
 
         # get all single values from the dict and flatten them into a list
         all_perplexities = [
@@ -590,6 +631,13 @@ if __name__ == "__main__":
         type=int,
         default=16,
         help="specifies the batch size for the training/eval",
+    )
+    parser.add_argument(
+        "--perplexity_batch_size",
+        "-pbs",
+        type=int,
+        default=16,
+        help="specifies the batch size for the perplexity calculation",
     )
     parser.add_argument(
         "--skip_training",
