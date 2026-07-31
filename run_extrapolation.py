@@ -9,6 +9,7 @@ from datetime import timedelta
 from typing import Final
 import getpass
 import datetime
+import shutil
 import argparse
 import subprocess
 import psutil
@@ -178,7 +179,7 @@ def main(
         "\n"
         + f"## {TColors.BOLD}{TColors.HEADER}{TColors.UNDERLINE}System Information"
         + f"{TColors.ENDC} "
-        + "#" * (os.get_terminal_size().columns - 23)
+        + "#" * (shutil.get_terminal_size().columns - 23)
     )
     print(
         f"## {TColors.OKBLUE}{TColors.BOLD}Date{TColors.ENDC}: "
@@ -218,7 +219,7 @@ def main(
     print(
         f"## {TColors.BOLD}{TColors.HEADER}{TColors.UNDERLINE}Parameters"
         + f"{TColors.ENDC} "
-        + "#" * (os.get_terminal_size().columns - 14)
+        + "#" * (shutil.get_terminal_size().columns - 14)
     )
     print(
         f"## {TColors.OKBLUE}{TColors.BOLD}Model Specifier{TColors.ENDC}: {MODEL_SPECIFIER}"
@@ -253,93 +254,94 @@ def main(
             f"## {TColors.OKBLUE}{TColors.BOLD}Continue from Generation{TColors.ENDC}: "
             f"{continue_from_generation}"
         )
-    print("#" * os.get_terminal_size().columns + "\n")
+    print("#" * shutil.get_terminal_size().columns + "\n")
 
-    # print information about the dataset
-    print(f"Max token count: {max(token_counts)}")
-    print(f"Avg token count: {sum(token_counts) / len(token_counts)}")
-    print(f"Min token count: {min(token_counts)}")
-    print(f"Original dataset length: {len(original_dataset)}\n")
-    original_dataset = original_dataset.map(format_prompt, batched=True)
-    original_dataset.save_to_disk(DATASET_PATH + f"original_dataset_bs{block_size}")
+    if not skip_training:
+        # print information about the dataset
+        print(f"Max token count: {max(token_counts)}")
+        print(f"Avg token count: {sum(token_counts) / len(token_counts)}")
+        print(f"Min token count: {min(token_counts)}")
+        print(f"Original dataset length: {len(original_dataset)}\n")
+        original_dataset = original_dataset.map(format_prompt, batched=True)
+        original_dataset.save_to_disk(DATASET_PATH + f"original_dataset_bs{block_size}")
 
-    # preprocess the dataset
-    chunked_dataset = original_dataset
-    chunked_dataset.save_to_disk(
-        DATASET_PATH + f"chunked_dataset_bs{block_size}_{specifier_name}_ex"
-    )
+        # preprocess the dataset
+        chunked_dataset = original_dataset
+        chunked_dataset.save_to_disk(
+            DATASET_PATH + f"chunked_dataset_bs{block_size}_{specifier_name}_ex"
+        )
 
-    for gen_id in range(num_generations):
-        # check if generations need to be skipped if continue_from_generation > 0
-        if gen_id < continue_from_generation:
-            continue
+        for gen_id in range(num_generations):
+            # check if generations need to be skipped if continue_from_generation > 0
+            if gen_id < continue_from_generation:
+                continue
 
-        # ────────────────────────────── generate the new datasets ────────────────────────────
-        # first, split the previous dataset into X subdatasets for each GPU
-        # the generation processes are then called in parallel to be split onto the different
-        # GPUs then the subdatasets are merged again to form the final single dataset
-        if os.environ.get("CUDA_VISIBLE_DEVICES") is not None:
-            devices = list(
-                map(int, os.environ.get("CUDA_VISIBLE_DEVICES").split(","))
-            )
-        else:
-            if str(device).startswith("cuda"):
-                devices = list(range(torch.cuda.device_count()))
-            else:
-                devices = [0]
-        process_list = []
-        for d_id, shard_id in zip(devices, range(len(devices))):
-            # split the dataset into subsets per device and save to disk
-            temp_subdataset = original_dataset.shard(
-                num_shards=len(devices), index=shard_id
-            )
-            temp_subdataset.save_to_disk(
-                DATASET_PATH
-                + f"base_subdataset_bs{block_size}_{specifier_name}_ex_shard{shard_id}"
-            )
-            process = subprocess.Popen(
-                [
-                    "env",
-                    f"CUDA_VISIBLE_DEVICES={d_id}",
-                    "python",
-                    "generate_dataset_extrapolation.py",
-                    "--block_size",
-                    str(block_size),
-                    "--specifier_name",
-                    specifier_name,
-                    "--dataset_batch_size",
-                    str(dataset_batch_size),
-                    "--generation",
-                    str(gen_id),
-                    "--shard_id",
-                    str(shard_id),
-                    "--path",
-                    str(path),
-                ],
-            )
-            process_list.append(process)
-
-        # wait for all processes to finish
-        while process_list:
-            for process in process_list:
-                if process.poll() is not None:
-                    process_list.remove(process)
-            time.sleep(10)
-
-        # merge all the subdatasets to one single dataset again
-        merged_dataset = concatenate_datasets(
-            [
-                Dataset.load_from_disk(
-                    DATASET_PATH
-                    + f"subdataset_{gen_id}_bs{block_size}_{specifier_name}_ex_shard{shard_id}"
+            # ────────────────────────────── generate the new datasets ────────────────────────────
+            # first, split the previous dataset into X subdatasets for each GPU
+            # the generation processes are then called in parallel to be split onto the different
+            # GPUs then the subdatasets are merged again to form the final single dataset
+            if os.environ.get("CUDA_VISIBLE_DEVICES") is not None:
+                devices = list(
+                    map(int, os.environ.get("CUDA_VISIBLE_DEVICES").split(","))
                 )
-                for shard_id in range(len(devices))
-            ]
-        )
-        merged_dataset.save_to_disk(
-            DATASET_PATH
-            + f"generated_dataset_{gen_id}_bs{block_size}_{specifier_name}_ex"
-        )
+            else:
+                if str(device).startswith("cuda"):
+                    devices = list(range(torch.cuda.device_count()))
+                else:
+                    devices = [0]
+            process_list = []
+            for d_id, shard_id in zip(devices, range(len(devices))):
+                # split the dataset into subsets per device and save to disk
+                temp_subdataset = original_dataset.shard(
+                    num_shards=len(devices), index=shard_id
+                )
+                temp_subdataset.save_to_disk(
+                    DATASET_PATH
+                    + f"base_subdataset_bs{block_size}_{specifier_name}_ex_shard{shard_id}"
+                )
+                process = subprocess.Popen(
+                    [
+                        "env",
+                        f"CUDA_VISIBLE_DEVICES={d_id}",
+                        "python",
+                        "generate_dataset_extrapolation.py",
+                        "--block_size",
+                        str(block_size),
+                        "--specifier_name",
+                        specifier_name,
+                        "--dataset_batch_size",
+                        str(dataset_batch_size),
+                        "--generation",
+                        str(gen_id),
+                        "--shard_id",
+                        str(shard_id),
+                        "--path",
+                        str(path),
+                    ],
+                )
+                process_list.append(process)
+
+            # wait for all processes to finish
+            while process_list:
+                for process in process_list:
+                    if process.poll() is not None:
+                        process_list.remove(process)
+                time.sleep(10)
+
+            # merge all the subdatasets to one single dataset again
+            merged_dataset = concatenate_datasets(
+                [
+                    Dataset.load_from_disk(
+                        DATASET_PATH
+                        + f"subdataset_{gen_id}_bs{block_size}_{specifier_name}_ex_shard{shard_id}"
+                    )
+                    for shard_id in range(len(devices))
+                ]
+            )
+            merged_dataset.save_to_disk(
+                DATASET_PATH
+                + f"generated_dataset_{gen_id}_bs{block_size}_{specifier_name}_ex"
+            )
 
     # ────────────────── evaluate the models' perplexity and other metrics ─────────────────────────
     # iterate over every model and the generated dataset and calculate the perplexity
