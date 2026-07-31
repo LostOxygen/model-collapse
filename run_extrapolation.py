@@ -16,8 +16,6 @@ import psutil
 import pytz
 
 import torch
-from torch.nn import functional as F
-from torch.utils.data import DataLoader
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 import seaborn as sns
@@ -361,101 +359,89 @@ def main(
         perplexity_dict = {}
         all_perplexities = []
 
-        # load the model
-        perpl_model, perpl_tokenizer = FastLanguageModel.from_pretrained(
-            model_name=MODEL_SPECIFIER,
-            max_seq_length=int(block_size * 2),
-            dtype=None,
-            load_in_4bit=True,
+        # the datasets are split into one shard per GPU and every shard is processed by its
+        # own subprocess. Each subprocess handles all generations of its shard, so the model
+        # only has to be loaded once per GPU. Afterwards the per-shard results are merged
+        if os.environ.get("CUDA_VISIBLE_DEVICES") is not None:
+            devices = list(map(int, os.environ.get("CUDA_VISIBLE_DEVICES").split(",")))
+        else:
+            if str(device).startswith("cuda"):
+                devices = list(range(torch.cuda.device_count()))
+            else:
+                devices = [0]
+
+        print(
+            f"## {TColors.OKBLUE}{TColors.BOLD}Using {len(devices)} GPU(s) for the "
+            f"perplexity calculation{TColors.ENDC}"
         )
 
-        FastLanguageModel.for_inference(perpl_model)
+        shard_files = [
+            DATASET_PATH
+            + f"perplexity_dict_bs{block_size}_{specifier_name}_ex_shard{shard_id}.pt"
+            for shard_id in range(len(devices))
+        ]
+        # remove stale shard files so results of a previous run can't be picked up
+        for shard_file in shard_files:
+            if os.path.exists(shard_file):
+                os.remove(shard_file)
 
-        # padding is needed to batch samples of different lengths together
-        if perpl_tokenizer.pad_token is None:
-            perpl_tokenizer.pad_token = perpl_tokenizer.eos_token
-        perpl_tokenizer.padding_side = "right"
+        process_list = []
+        for shard_id, d_id in enumerate(devices):
+            process = subprocess.Popen(
+                [
+                    "env",
+                    f"CUDA_VISIBLE_DEVICES={d_id}",
+                    "python",
+                    "calculate_perplexity_extrapolation.py",
+                    "--block_size",
+                    str(block_size),
+                    "--specifier_name",
+                    specifier_name,
+                    "--model_specifier",
+                    MODEL_SPECIFIER,
+                    "--perplexity_batch_size",
+                    str(perplexity_batch_size),
+                    "--num_generations",
+                    str(num_generations),
+                    "--shard_id",
+                    str(shard_id),
+                    "--num_shards",
+                    str(len(devices)),
+                    "--path",
+                    str(path),
+                ],
+            )
+            process_list.append(process)
 
-        for i in range(num_generations):
-            # load the dataset
-            if i == 0:
-                # for the first generation, use the original dataset
-                ppl_dataset = Dataset.load_from_disk(
-                    DATASET_PATH
-                    + f"/chunked_dataset_bs{block_size}_{specifier_name}_ex"
-                )
-            else:
-                ppl_dataset = Dataset.load_from_disk(
-                    DATASET_PATH
-                    + f"/generated_dataset_{i - 1}_bs{block_size}_{specifier_name}_ex"
-                )
+        # wait for all processes to finish
+        for process in process_list:
+            process.wait()
 
-            ppl_dataloader = DataLoader(
-                ppl_dataset.with_format("torch"),
-                batch_size=perplexity_batch_size,
+        # every shard has to be there, otherwise the merged perplexities would be incomplete
+        failed_shards = [
+            shard_id
+            for shard_id, process in enumerate(process_list)
+            if process.returncode != 0
+        ]
+        if failed_shards:
+            raise RuntimeError(
+                f"The perplexity calculation failed for shard(s) {failed_shards}. "
+                "See the subprocess output above for the actual error."
             )
 
-            # add new entry to the dict
-            perplexity_dict[f"Generation {i}"] = []
+        # merge the per-shard perplexities back together. The shards are contiguous, so
+        # concatenating them in shard order restores the original dataset order
+        shard_dicts = [torch.load(shard_file) for shard_file in shard_files]
+        for i in range(num_generations):
+            perplexity_dict[f"Generation {i}"] = [
+                perplexity
+                for shard_dict in shard_dicts
+                for perplexity in shard_dict[f"Generation {i}"]
+            ]
 
-            # calculate the perplexity for every datapoint in the dataset (eval)
-            for data_batch in tqdm(
-                ppl_dataloader, desc=f"Calculating perplexity for Generation {i}"
-            ):
-                formatted_prompts = [
-                    perpl_tokenizer.apply_chat_template(
-                        [
-                            {
-                                "role": "system",
-                                "content": "You are a helpful assistant for code "
-                                "completion.",
-                            },
-                            {"role": "user", "content": instruction},
-                            {"role": "assistant", "content": response},
-                        ],
-                        tokenize=False,
-                        add_special_tokens=False,
-                    )
-                    for instruction, response in zip(
-                        data_batch["instruction"], data_batch["response"]
-                    )
-                ]
-
-                inputs = perpl_tokenizer(
-                    formatted_prompts,
-                    padding=True,
-                    truncation=True,
-                    return_tensors="pt",
-                ).to("cuda")
-
-                # calculate the perplexity for every datapoint of the batch. The loss
-                # has to be computed manually (instead of passing labels to the model)
-                # since the model would average it over the whole batch and the padding
-                # tokens would be included in the loss
-                with torch.no_grad():
-                    logits = perpl_model(**inputs).logits
-
-                    # shift by one position to predict the next token
-                    shift_logits = logits[:, :-1, :].float()
-                    shift_labels = inputs["input_ids"][:, 1:]
-                    shift_mask = inputs["attention_mask"][:, 1:]
-
-                    token_losses = F.cross_entropy(
-                        shift_logits.transpose(1, 2),
-                        shift_labels,
-                        reduction="none",
-                    )
-
-                    # mask out the padding tokens and average over the real tokens only
-                    # to get one loss (and therefore perplexity) per single sample
-                    sample_losses = (token_losses * shift_mask).sum(dim=1) / (
-                        shift_mask.sum(dim=1).clamp(min=1)
-                    )
-                    perplexities = torch.exp(sample_losses)
-
-                    perplexity_dict[f"Generation {i}"].extend(
-                        perplexities.tolist()
-                    )
+        # clean up the temporary shard files
+        for shard_file in shard_files:
+            os.remove(shard_file)
 
         # get all single values from the dict and flatten them into a list
         all_perplexities = [
