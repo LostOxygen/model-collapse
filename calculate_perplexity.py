@@ -14,6 +14,7 @@ Args:
     num_generations (int): The total number of generations to evaluate.
     shard_id (int): The current shard id.
     num_shards (int): The total number of shards (i.e., the number of used GPUs).
+    dataset_suffix (str): Suffix of the dataset file names ("_ex" for the extrapolation runs).
     path (str): The path where the datasets and models are stored.
 
 Returns:
@@ -23,6 +24,7 @@ from unsloth import FastLanguageModel
 
 import os
 import argparse
+from typing import Final
 
 from datasets import Dataset
 from torch.utils.data import DataLoader
@@ -34,6 +36,10 @@ from utils.colors import TColors
 
 DATASET_PATH: str = "./generated_datasets/"
 MODEL_PATH: str = "./model_outputs/"
+# number of token positions whose logits are upcasted to float32 at once. This bounds the
+# memory of the loss computation independently of the batch size and the sequence length
+# (2048 positions need ~2.3GB for the float32 copy and cross_entropy's internal buffer)
+CE_CHUNK_POSITIONS: Final[int] = 2048
 
 
 parser = argparse.ArgumentParser(description="Perplexity Calculation")
@@ -63,7 +69,9 @@ parser.add_argument(
     "-pbs",
     type=int,
     default=16,
-    help="specifies the batch size for the perplexity calculation",
+    help="specifies the batch size for the perplexity calculation. The memory scales with "
+    "batch size * sequence length * vocabulary size, i.e., ~1.25GB per sample at a "
+    "sequence length of 4096 (default: 16, which needs ~22GB of the 48GB VRAM)",
 )
 parser.add_argument(
     "--num_generations",
@@ -87,6 +95,13 @@ parser.add_argument(
     help="sets the total number of shards (i.e., the number of used GPUs)",
 )
 parser.add_argument(
+    "--dataset_suffix",
+    "-ds",
+    type=str,
+    default="",
+    help="suffix of the dataset file names ('_ex' for the extrapolation runs)",
+)
+parser.add_argument(
     "--path",
     "-p",
     type=str,
@@ -104,6 +119,7 @@ perplexity_batch_size = args.perplexity_batch_size
 num_generations = args.num_generations
 shard_id = args.shard_id
 num_shards = args.num_shards
+dataset_suffix = args.dataset_suffix
 path = args.path
 
 # set data paths
@@ -140,12 +156,13 @@ for i in range(num_generations):
     if i == 0:
         # for the first generation, use the original dataset
         ppl_dataset = Dataset.load_from_disk(
-            DATASET_PATH + f"/chunked_dataset_bs{block_size}_{specifier_name}_ex"
+            DATASET_PATH
+            + f"/chunked_dataset_bs{block_size}_{specifier_name}{dataset_suffix}"
         )
     else:
         ppl_dataset = Dataset.load_from_disk(
             DATASET_PATH
-            + f"/generated_dataset_{i - 1}_bs{block_size}_{specifier_name}_ex"
+            + f"/generated_dataset_{i - 1}_bs{block_size}_{specifier_name}{dataset_suffix}"
         )
 
     # only process this process' share of the dataset. Contiguous shards are used so that
@@ -185,10 +202,14 @@ for i in range(num_generations):
             )
         ]
 
+        # max_length has to be set explicitly, otherwise the tokenizer truncates to the
+        # tokenizer's model_max_length (131072 for Qwen2.5), which would allow single
+        # batches that are magnitudes larger than what the model was loaded with
         inputs = perpl_tokenizer(
             formatted_prompts,
             padding=True,
             truncation=True,
+            max_length=int(block_size * 2),
             return_tensors="pt",
         ).to("cuda")
 
@@ -196,18 +217,37 @@ for i in range(num_generations):
         # computed manually (instead of passing labels to the model) since the model would
         # average it over the whole batch and the padding tokens would be included in the loss
         with torch.no_grad():
-            logits = perpl_model(**inputs).logits
+            # use_cache=False since nothing is generated here and the KV cache would only
+            # allocate additional memory
+            logits = perpl_model(**inputs, use_cache=False).logits
 
             # shift by one position to predict the next token
-            shift_logits = logits[:, :-1, :].float()
             shift_labels = inputs["input_ids"][:, 1:]
             shift_mask = inputs["attention_mask"][:, 1:]
 
-            token_losses = F.cross_entropy(
-                shift_logits.transpose(1, 2),
-                shift_labels,
-                reduction="none",
+            current_batch_size, num_positions = shift_labels.shape
+
+            # the logits are batch x sequence x vocabulary and thus by far the biggest
+            # allocation. Upcasting all of them to float32 at once would need twice their
+            # size again (plus the same amount inside cross_entropy), so the loss is
+            # computed in chunks of at most CE_CHUNK_POSITIONS positions instead. This keeps
+            # the additional memory constant instead of growing with the batch size
+            chunk_len = max(1, CE_CHUNK_POSITIONS // current_batch_size)
+            token_losses = torch.empty(
+                (current_batch_size, num_positions),
+                dtype=torch.float32,
+                device=logits.device,
             )
+            for start in range(0, num_positions, chunk_len):
+                end = min(start + chunk_len, num_positions)
+                token_losses[:, start:end] = F.cross_entropy(
+                    logits[:, start:end, :].float().transpose(1, 2),
+                    shift_labels[:, start:end],
+                    reduction="none",
+                )
+
+            # free the logits before the reduction, they are the largest tensor by far
+            del logits
 
             # mask out the padding tokens and average over the real tokens only to get one
             # loss (and therefore perplexity) per single sample
@@ -218,9 +258,15 @@ for i in range(num_generations):
 
             perplexity_dict[f"Generation {i}"].extend(perplexities.tolist())
 
+    # the next generation uses a different dataset with different sequence lengths, so the
+    # cached blocks of this generation would only fragment the allocator
+    del ppl_dataloader, ppl_dataset
+    torch.cuda.empty_cache()
+
 # save the shard's perplexities to disk to be merged by the main script
 torch.save(
     perplexity_dict,
     DATASET_PATH
-    + f"perplexity_dict_bs{block_size}_{specifier_name}_ex_shard{shard_id}.pt",
+    + f"perplexity_dict_bs{block_size}_{specifier_name}{dataset_suffix}"
+    + f"_shard{shard_id}.pt",
 )

@@ -14,7 +14,6 @@ import psutil
 
 from unsloth import FastLanguageModel, is_bfloat16_supported
 import torch
-from torch.utils.data import DataLoader
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 import seaborn as sns
@@ -71,6 +70,7 @@ def main(
     training_epochs: int = 5,
     dataset_batch_size: int = 10,
     training_batch_size: int = 8,
+    perplexity_batch_size: int = 16,
     skip_training: bool = False,
     num_generations: int = 5,
     block_size: int = 64,
@@ -88,6 +88,7 @@ def main(
         training_epochs (int): number of training epochs to run
         dataset_batch_size (int): batch size for the dataset
         training_batch_size (int): batch size for the training/eval
+        perplexity_batch_size (int): batch size for the perplexity calculation
         skip_training (bool): if True, skip the training and only evaluate the models
         num_generations (int): number of generations to run (default: 5)
         block_size (int): size of the blocks to split the dataset into (default: 64)
@@ -234,6 +235,10 @@ def main(
     )
     print(
         f"## {TColors.OKBLUE}{TColors.BOLD}Training Batch Size{TColors.ENDC}: {training_batch_size}"
+    )
+    print(
+        f"## {TColors.OKBLUE}{TColors.BOLD}Perplexity Batch Size{TColors.ENDC}: "
+        f"{perplexity_batch_size}"
     )
     print(
         f"## {TColors.OKBLUE}{TColors.BOLD}Skip Training{TColors.ENDC}: {skip_training}"
@@ -495,74 +500,93 @@ def main(
             perplexity_dict = {}
             all_perplexities = []
 
-            # load the model
-            perpl_model, perpl_tokenizer = FastLanguageModel.from_pretrained(
-                model_name=MODEL_SPECIFIER,
-                max_seq_length=int(block_size*2),
-                dtype=None,
-                load_in_4bit=True,
+            # the datasets are split into one shard per GPU and every shard is processed by
+            # its own subprocess. Each subprocess handles all generations of its shard, so
+            # the model only has to be loaded once per GPU. Afterwards the per-shard results
+            # are merged
+            if os.environ.get("CUDA_VISIBLE_DEVICES") is not None:
+                devices = list(
+                    map(int, os.environ.get("CUDA_VISIBLE_DEVICES").split(","))
+                )
+            else:
+                if str(device).startswith("cuda"):
+                    devices = list(range(torch.cuda.device_count()))
+                else:
+                    devices = [0]
+
+            print(
+                f"## {TColors.OKBLUE}{TColors.BOLD}Using {len(devices)} GPU(s) for the "
+                f"perplexity calculation{TColors.ENDC}"
             )
 
-            FastLanguageModel.for_inference(perpl_model)
-            for i in range(num_generations):
+            shard_files = [
+                DATASET_PATH
+                + f"perplexity_dict_bs{block_size}_{specifier_name}_shard{shard_id}.pt"
+                for shard_id in range(len(devices))
+            ]
+            # remove stale shard files so results of a previous run can't be picked up
+            for shard_file in shard_files:
+                if os.path.exists(shard_file):
+                    os.remove(shard_file)
 
-                # load the dataset
-                if i == 0:
-                    # for the first generation, use the original dataset
-                    ppl_dataset = Dataset.load_from_disk(
-                        DATASET_PATH + f"/chunked_dataset_bs{block_size}_{specifier_name}"
-                    )
-                else:
-                    ppl_dataset = Dataset.load_from_disk(
-                        DATASET_PATH
-                        + f"/generated_dataset_{i - 1}_bs{block_size}_{specifier_name}"
-                    )
+            process_list = []
+            for shard_id, d_id in enumerate(devices):
+                process = subprocess.Popen(
+                    [
+                        "env",
+                        f"CUDA_VISIBLE_DEVICES={d_id}",
+                        "python",
+                        "calculate_perplexity.py",
+                        "--block_size",
+                        str(block_size),
+                        "--specifier_name",
+                        specifier_name,
+                        "--model_specifier",
+                        MODEL_SPECIFIER,
+                        "--perplexity_batch_size",
+                        str(perplexity_batch_size),
+                        "--num_generations",
+                        str(num_generations),
+                        "--shard_id",
+                        str(shard_id),
+                        "--num_shards",
+                        str(len(devices)),
+                        "--path",
+                        str(path),
+                    ],
+                )
+                process_list.append(process)
 
-                ppl_dataloader = DataLoader(
-                    ppl_dataset.with_format("torch"),
-                    batch_size=1,  # batch size for the perplexity calculation
+            # wait for all processes to finish
+            for process in process_list:
+                process.wait()
+
+            # every shard has to be there, otherwise the merged perplexities would be
+            # incomplete
+            failed_shards = [
+                shard_id
+                for shard_id, process in enumerate(process_list)
+                if process.returncode != 0
+            ]
+            if failed_shards:
+                raise RuntimeError(
+                    f"The perplexity calculation failed for shard(s) {failed_shards}. "
+                    "See the subprocess output above for the actual error."
                 )
 
-                # add new entry to the dict
-                perplexity_dict[f"Generation {i}"] = []
+            # merge the per-shard perplexities back together. The shards are contiguous, so
+            # concatenating them in shard order restores the original dataset order
+            shard_dicts = [torch.load(shard_file) for shard_file in shard_files]
+            for i in range(num_generations):
+                perplexity_dict[f"Generation {i}"] = [
+                    perplexity
+                    for shard_dict in shard_dicts
+                    for perplexity in shard_dict[f"Generation {i}"]
+                ]
 
-                # calculate the perplexity for every datapoint in the dataset (eval)
-                for data_batch in tqdm(
-                    ppl_dataloader, desc=f"Calculating perplexity for Generation {i}"
-                ):
-
-                    prompt = [
-                        {
-                            "role": "system",
-                            "content": "You are a helpful assistant for code completion."
-                        },
-                        {
-                            "role": "user",
-                            "content": data_batch["instruction"][0]
-                        },
-                        {
-                            "role": "assistant",
-                            "content": data_batch["response"][0]
-                        }
-                    ]
-
-                    formatted_prompt = perpl_tokenizer.apply_chat_template(
-                        prompt, tokenize=False, add_special_tokens=False
-                    )
-
-                    inputs = perpl_tokenizer(
-                        formatted_prompt,
-                        padding=True,
-                        truncation=True,
-                        return_tensors="pt",
-                    ).to("cuda")
-
-                    # calculate the perplexity for every datapoint in the dataset
-                    with torch.no_grad():
-                        outputs = perpl_model(**inputs, labels=inputs["input_ids"])
-                        loss = outputs.loss
-                        perplexity = torch.exp(loss)
-                        perplexity_dict[f"Generation {i}"].append(perplexity.item())
+            # clean up the temporary shard files
+            for shard_file in shard_files:
+                os.remove(shard_file)
 
             # get all single values from the dict and flatten them into a list
             all_perplexities = [
@@ -736,6 +760,15 @@ if __name__ == "__main__":
         type=int,
         default=16,
         help="specifies the batch size for the training/eval",
+    )
+    parser.add_argument(
+        "--perplexity_batch_size",
+        "-pbs",
+        type=int,
+        default=16,
+        help="specifies the batch size for the perplexity calculation. The memory scales with "
+        "batch size * sequence length * vocabulary size, i.e., ~1.25GB per sample at a "
+        "sequence length of 4096 (default: 16, which needs ~22GB of the 48GB VRAM)",
     )
     parser.add_argument(
         "--skip_training",

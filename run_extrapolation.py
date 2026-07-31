@@ -392,7 +392,7 @@ def main(
                     "env",
                     f"CUDA_VISIBLE_DEVICES={d_id}",
                     "python",
-                    "calculate_perplexity_extrapolation.py",
+                    "calculate_perplexity.py",
                     "--block_size",
                     str(block_size),
                     "--specifier_name",
@@ -407,6 +407,8 @@ def main(
                     str(shard_id),
                     "--num_shards",
                     str(len(devices)),
+                    "--dataset_suffix",
+                    "_ex",
                     "--path",
                     str(path),
                 ],
@@ -623,7 +625,9 @@ if __name__ == "__main__":
         "-pbs",
         type=int,
         default=16,
-        help="specifies the batch size for the perplexity calculation",
+        help="specifies the batch size for the perplexity calculation. The memory scales with "
+        "batch size * sequence length * vocabulary size, i.e., ~1.25GB per sample at a "
+        "sequence length of 4096 (default: 16, which needs ~22GB of the 48GB VRAM)",
     )
     parser.add_argument(
         "--skip_training",
