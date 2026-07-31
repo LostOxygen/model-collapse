@@ -77,7 +77,6 @@ def main(
     num_generations: int = 5,
     block_size: int = 64,
     histogram_only: bool = False,
-    human_eval_only: bool = False,
     path: str = "",
     model_specifier: str = "",
     continue_from_generation: int = 0,
@@ -94,7 +93,6 @@ def main(
         num_generations (int): number of generations to run (default: 5)
         block_size (int): size of the blocks to split the dataset into (default: 64)
         histogram_only (bool): if True, only generate the histogram and skip the rest
-        human_eval_only (bool): if True, only generate human eval samples and skip the rest
         path (str): path to save the generated datasets and models
         model_specifier (str): model specifier to use for the training
         continue_from_generation (int): generation to continue from (default: 0, start from scratch)
@@ -347,200 +345,199 @@ def main(
     # iterate over every model and the generated dataset and calculate the perplexity
     # for the perplexity, every datapoint i.e., the generated answer for every question
     # is evaluated to get the probability for a given perplexity over the whole dataset
-    if not human_eval_only:
-        if not histogram_only:
-            print(
-                f"## {TColors.OKBLUE}{TColors.BOLD}Calculate Perplexity{TColors.ENDC}"
-            )
-            perplexity_dict = {}
-            all_perplexities = []
+    if not histogram_only:
+        print(
+            f"## {TColors.OKBLUE}{TColors.BOLD}Calculate Perplexity{TColors.ENDC}"
+        )
+        perplexity_dict = {}
+        all_perplexities = []
 
-            # load the model
-            perpl_model, perpl_tokenizer = FastLanguageModel.from_pretrained(
-                model_name=MODEL_SPECIFIER,
-                max_seq_length=int(block_size * 2),
-                dtype=None,
-                load_in_4bit=True,
-            )
+        # load the model
+        perpl_model, perpl_tokenizer = FastLanguageModel.from_pretrained(
+            model_name=MODEL_SPECIFIER,
+            max_seq_length=int(block_size * 2),
+            dtype=None,
+            load_in_4bit=True,
+        )
 
-            FastLanguageModel.for_inference(perpl_model)
-            for i in range(num_generations):
-                # load the dataset
-                if i == 0:
-                    # for the first generation, use the original dataset
-                    ppl_dataset = Dataset.load_from_disk(
-                        DATASET_PATH
-                        + f"/chunked_dataset_bs{block_size}_{specifier_name}"
-                    )
-                else:
-                    ppl_dataset = Dataset.load_from_disk(
-                        DATASET_PATH
-                        + f"/generated_dataset_{i - 1}_bs{block_size}_{specifier_name}_ex"
-                    )
-
-                ppl_dataloader = DataLoader(
-                    ppl_dataset.with_format("torch"),
-                    batch_size=1,  # batch size for the perplexity calculation
+        FastLanguageModel.for_inference(perpl_model)
+        for i in range(num_generations):
+            # load the dataset
+            if i == 0:
+                # for the first generation, use the original dataset
+                ppl_dataset = Dataset.load_from_disk(
+                    DATASET_PATH
+                    + f"/chunked_dataset_bs{block_size}_{specifier_name}_ex"
+                )
+            else:
+                ppl_dataset = Dataset.load_from_disk(
+                    DATASET_PATH
+                    + f"/generated_dataset_{i - 1}_bs{block_size}_{specifier_name}_ex"
                 )
 
-                # add new entry to the dict
-                perplexity_dict[f"Generation {i}"] = []
-
-                # calculate the perplexity for every datapoint in the dataset (eval)
-                for data_batch in tqdm(
-                    ppl_dataloader, desc=f"Calculating perplexity for Generation {i}"
-                ):
-                    prompt = [
-                        {
-                            "role": "system",
-                            "content": "You are a helpful assistant for code completion.",
-                        },
-                        {"role": "user", "content": data_batch["instruction"][0]},
-                        {"role": "assistant", "content": data_batch["response"][0]},
-                    ]
-
-                    formatted_prompt = perpl_tokenizer.apply_chat_template(
-                        prompt, tokenize=False, add_special_tokens=False
-                    )
-
-                    inputs = perpl_tokenizer(
-                        formatted_prompt,
-                        padding=True,
-                        truncation=True,
-                        return_tensors="pt",
-                    ).to("cuda")
-
-                    # calculate the perplexity for every datapoint in the dataset
-                    with torch.no_grad():
-                        outputs = perpl_model(**inputs, labels=inputs["input_ids"])
-                        loss = outputs.loss
-                        perplexity = torch.exp(loss)
-                        perplexity_dict[f"Generation {i}"].append(perplexity.item())
-
-            # get all single values from the dict and flatten them into a list
-            all_perplexities = [
-                perplexity
-                for values in perplexity_dict.values()
-                for perplexity in values
-            ]
-
-            # save the perplexity dict to a file
-            torch.save(
-                perplexity_dict,
-                DATASET_PATH + f"perplexity_dict_bs{block_size}_{specifier_name}_ex.pt",
-            )  # save the dict to a file
-            print(
-                f"## {TColors.OKBLUE}{TColors.BOLD}Saved the perplexity dict under: "
-                f"{TColors.HEADER}{DATASET_PATH}perplexity_dict_bs{block_size}_{specifier_name}_ex"
-                f".pt{TColors.ENDC}"
-            )
-            # save the all_perplexities list to a file
-            torch.save(
-                all_perplexities,
-                DATASET_PATH + f"all_perplexities_bs{block_size}_{specifier_name}_ex.pt",
-            )  # save the list to a file
-            print(
-                f"## {TColors.OKBLUE}{TColors.BOLD}Saved the all_perplexities list under: "
-                f"{TColors.HEADER}{DATASET_PATH}all_perplexities_bs{block_size}_{specifier_name}_ex"
-                f".pt{TColors.ENDC}"
-            )
-        else:
-            # load the perplexity dict and all_perplexities list from the files
-            perplexity_dict = torch.load(
-                DATASET_PATH + f"perplexity_dict_bs{block_size}_{specifier_name}_ex.pt"
-            )
-            all_perplexities = torch.load(
-                DATASET_PATH + f"all_perplexities_bs{block_size}_{specifier_name}_ex.pt"
+            ppl_dataloader = DataLoader(
+                ppl_dataset.with_format("torch"),
+                batch_size=1,  # batch size for the perplexity calculation
             )
 
-        # ────────────────── plot the perplexity histogram ─────────────────────────
-        print(
-            f"## {TColors.OKBLUE}{TColors.BOLD}Plotting Perplexity Histogram{TColors.ENDC}"
-        )
+            # add new entry to the dict
+            perplexity_dict[f"Generation {i}"] = []
 
-        bins = torch.logspace(
-            torch.log10(torch.tensor(min(all_perplexities))),
-            torch.log10(torch.tensor(max(all_perplexities))),
-            steps=401,
-        )
+            # calculate the perplexity for every datapoint in the dataset (eval)
+            for data_batch in tqdm(
+                ppl_dataloader, desc=f"Calculating perplexity for Generation {i}"
+            ):
+                prompt = [
+                    {
+                        "role": "system",
+                        "content": "You are a helpful assistant for code completion.",
+                    },
+                    {"role": "user", "content": data_batch["instruction"][0]},
+                    {"role": "assistant", "content": data_batch["response"][0]},
+                ]
 
-        custom_colors = [
-            "#2369BD",  # darker blue
-            "#006BA4",  # dark blue
-            "#5F9ED1",  # light blue
-            "#A2C8EC",  # very light blue
-            "#ABABAB",  # gray
-            "#898989",  # dark gray
-            "#898989",  # darker gray
-            "#FFBC79",  # light orange
-            "#FF800E",  # orange
-            "#C85200",  # dark orange
-            "#A9373B",  # dark red
+                formatted_prompt = perpl_tokenizer.apply_chat_template(
+                    prompt, tokenize=False, add_special_tokens=False
+                )
+
+                inputs = perpl_tokenizer(
+                    formatted_prompt,
+                    padding=True,
+                    truncation=True,
+                    return_tensors="pt",
+                ).to("cuda")
+
+                # calculate the perplexity for every datapoint in the dataset
+                with torch.no_grad():
+                    outputs = perpl_model(**inputs, labels=inputs["input_ids"])
+                    loss = outputs.loss
+                    perplexity = torch.exp(loss)
+                    perplexity_dict[f"Generation {i}"].append(perplexity.item())
+
+        # get all single values from the dict and flatten them into a list
+        all_perplexities = [
+            perplexity
+            for values in perplexity_dict.values()
+            for perplexity in values
         ]
 
-        cb_palette = sns.color_palette(custom_colors, n_colors=10, as_cmap=True)
-        sns.set_palette(cb_palette)
-        sns.set_style("whitegrid")
-
-        mpl.rcParams.update(
-            {
-                "text.usetex": True,
-                "text.latex.preamble": r"\usepackage{bm}",
-                "font.family": "serif",
-                "font.serif": ["Times"],
-                "font.size": 22,
-                "font.weight": "bold",  # <--- Make default font bold
-                "axes.labelsize": 22,
-                "axes.labelweight": "bold",  # <--- Bold axis labels
-                "axes.titlesize": 20,
-                "axes.titleweight": "bold",  # <--- Bold title
-                "legend.fontsize": 17,
-                "xtick.labelsize": 20,
-                "ytick.labelsize": 20,
-                "xtick.major.width": 2,  # Optional: thicker ticks
-                "ytick.major.width": 2,
-                "pdf.compression": 9,
-            }
-        )
-
-        plt.figure(figsize=(10, 6))
-        for name, perplexities in perplexity_dict.items():
-            sns.histplot(
-                perplexities,
-                bins=bins,
-                stat="density",
-                label=name,
-                element="step",
-                alpha=0.4,
-            )
-
-        plt.xscale("log")
-        plt.yscale("log")
-        plt.ylim(1e-5, 1)
-
-        plt.xlabel("Perplexity", fontweight="bold")
-        plt.ylabel("Probability", fontweight="bold")
-        plt.title("Perplexity with extrapolation", fontweight="bold")
-        plt.legend(loc="upper right")
-
-        for spine in plt.gca().spines.values():
-            spine.set_color("black")
-
-        plt.tight_layout()
-
-        # check if plots/ is a directory
-        if not os.path.exists("plots/"):
-            os.makedirs("plots/")
-
-        plt.savefig(f"plots/perplexity_histogram_bs{block_size}_{specifier_name}_ex.pdf")
-        plt.savefig(f"plots/perplexity_histogram_bs{block_size}_{specifier_name}_ex.png")
-        plt.show()
-
+        # save the perplexity dict to a file
+        torch.save(
+            perplexity_dict,
+            DATASET_PATH + f"perplexity_dict_bs{block_size}_{specifier_name}_ex.pt",
+        )  # save the dict to a file
         print(
-            f"## {TColors.OKBLUE}{TColors.BOLD}Saved the histogram under: "
-            f"{TColors.HEADER}plots/perplexity_histogram_bs{block_size}_{specifier_name}_ex"
-            f".<png,pdf>{TColors.ENDC}"
+            f"## {TColors.OKBLUE}{TColors.BOLD}Saved the perplexity dict under: "
+            f"{TColors.HEADER}{DATASET_PATH}perplexity_dict_bs{block_size}_{specifier_name}_ex"
+            f".pt{TColors.ENDC}"
         )
+        # save the all_perplexities list to a file
+        torch.save(
+            all_perplexities,
+            DATASET_PATH + f"all_perplexities_bs{block_size}_{specifier_name}_ex.pt",
+        )  # save the list to a file
+        print(
+            f"## {TColors.OKBLUE}{TColors.BOLD}Saved the all_perplexities list under: "
+            f"{TColors.HEADER}{DATASET_PATH}all_perplexities_bs{block_size}_{specifier_name}_ex"
+            f".pt{TColors.ENDC}"
+        )
+    else:
+        # load the perplexity dict and all_perplexities list from the files
+        perplexity_dict = torch.load(
+            DATASET_PATH + f"perplexity_dict_bs{block_size}_{specifier_name}_ex.pt"
+        )
+        all_perplexities = torch.load(
+            DATASET_PATH + f"all_perplexities_bs{block_size}_{specifier_name}_ex.pt"
+        )
+
+    # ────────────────── plot the perplexity histogram ─────────────────────────
+    print(
+        f"## {TColors.OKBLUE}{TColors.BOLD}Plotting Perplexity Histogram{TColors.ENDC}"
+    )
+
+    bins = torch.logspace(
+        torch.log10(torch.tensor(min(all_perplexities))),
+        torch.log10(torch.tensor(max(all_perplexities))),
+        steps=401,
+    )
+
+    custom_colors = [
+        "#2369BD",  # darker blue
+        "#006BA4",  # dark blue
+        "#5F9ED1",  # light blue
+        "#A2C8EC",  # very light blue
+        "#ABABAB",  # gray
+        "#898989",  # dark gray
+        "#898989",  # darker gray
+        "#FFBC79",  # light orange
+        "#FF800E",  # orange
+        "#C85200",  # dark orange
+        "#A9373B",  # dark red
+    ]
+
+    cb_palette = sns.color_palette(custom_colors, n_colors=10, as_cmap=True)
+    sns.set_palette(cb_palette)
+    sns.set_style("whitegrid")
+
+    mpl.rcParams.update(
+        {
+            "text.usetex": True,
+            "text.latex.preamble": r"\usepackage{bm}",
+            "font.family": "serif",
+            "font.serif": ["Times"],
+            "font.size": 22,
+            "font.weight": "bold",  # <--- Make default font bold
+            "axes.labelsize": 22,
+            "axes.labelweight": "bold",  # <--- Bold axis labels
+            "axes.titlesize": 20,
+            "axes.titleweight": "bold",  # <--- Bold title
+            "legend.fontsize": 17,
+            "xtick.labelsize": 20,
+            "ytick.labelsize": 20,
+            "xtick.major.width": 2,  # Optional: thicker ticks
+            "ytick.major.width": 2,
+            "pdf.compression": 9,
+        }
+    )
+
+    plt.figure(figsize=(10, 6))
+    for name, perplexities in perplexity_dict.items():
+        sns.histplot(
+            perplexities,
+            bins=bins,
+            stat="density",
+            label=name,
+            element="step",
+            alpha=0.4,
+        )
+
+    plt.xscale("log")
+    plt.yscale("log")
+    plt.ylim(1e-5, 1)
+
+    plt.xlabel("Perplexity", fontweight="bold")
+    plt.ylabel("Probability", fontweight="bold")
+    plt.title("Perplexity with extrapolation", fontweight="bold")
+    plt.legend(loc="upper right")
+
+    for spine in plt.gca().spines.values():
+        spine.set_color("black")
+
+    plt.tight_layout()
+
+    # check if plots/ is a directory
+    if not os.path.exists("plots/"):
+        os.makedirs("plots/")
+
+    plt.savefig(f"plots/perplexity_histogram_bs{block_size}_{specifier_name}_ex.pdf")
+    plt.savefig(f"plots/perplexity_histogram_bs{block_size}_{specifier_name}_ex.png")
+    plt.show()
+
+    print(
+        f"## {TColors.OKBLUE}{TColors.BOLD}Saved the histogram under: "
+        f"{TColors.HEADER}plots/perplexity_histogram_bs{block_size}_{specifier_name}_ex"
+        f".<png,pdf>{TColors.ENDC}"
+    )
 
     # ────────────────── print the elapsed time ─────────────────────────
     # End the timer
@@ -618,12 +615,7 @@ if __name__ == "__main__":
         action="store_true",
         help="if set, only generate the histogram and skip the rest",
     )
-    parser.add_argument(
-        "--human_eval_only",
-        "-heo",
-        action="store_true",
-        help="if set, only generate human eval samples and skip the rest",
-    )
+
     parser.add_argument(
         "--model_specifier",
         "-ms",
