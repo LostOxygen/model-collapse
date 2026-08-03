@@ -1,4 +1,5 @@
 """main hook to start the pitfall 1 fine-tuning"""
+
 # -*- coding: utf-8 -*-
 # !/usr/bin/env python3
 from unsloth import FastLanguageModel
@@ -353,9 +354,7 @@ def main(
     # for the perplexity, every datapoint i.e., the generated answer for every question
     # is evaluated to get the probability for a given perplexity over the whole dataset
     if not histogram_only:
-        print(
-            f"## {TColors.OKBLUE}{TColors.BOLD}Calculate Perplexity{TColors.ENDC}"
-        )
+        print(f"## {TColors.OKBLUE}{TColors.BOLD}Calculate Perplexity{TColors.ENDC}")
         perplexity_dict = {}
         all_perplexities = []
 
@@ -447,9 +446,7 @@ def main(
 
         # get all single values from the dict and flatten them into a list
         all_perplexities = [
-            perplexity
-            for values in perplexity_dict.values()
-            for perplexity in values
+            perplexity for values in perplexity_dict.values() for perplexity in values
         ]
 
         # save the perplexity dict to a file
