@@ -11,6 +11,9 @@ model_outputs/
 *.csv
 .claude/
 CLAUDE.md
+plots/
+evalplus_results/
+model_collapse_venv/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
